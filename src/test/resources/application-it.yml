@@ -1,0 +1,10 @@
+spring:
+  sql:
+    init:
+      mode: never
+
+logging:
+  level:
+    org.springframework.r2dbc: DEBUG
+    io.r2dbc.postgresql.QUERY: DEBUG
+    root: INFO

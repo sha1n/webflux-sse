@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Event - Event Stream Dashboard</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: #007bff;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .nav {
+            background: #e9ecef;
+            padding: 15px 20px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .nav a {
+            color: #007bff;
+            text-decoration: none;
+            margin-right: 20px;
+            font-weight: 500;
+        }
+        .nav a:hover {
+            text-decoration: underline;
+        }
+        .nav .current {
+            color: #6c757d;
+            font-weight: 600;
+        }
+        .form-container {
+            padding: 40px;
+        }
+        .form-group {
+            margin-bottom: 25px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+            font-size: 14px;
+        }
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.15s ease-in-out;
+            box-sizing: border-box;
+        }
+        .form-group input:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+        .form-group textarea {
+            resize: vertical;
+            height: 120px;
+            font-family: inherit;
+        }
+        .form-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-start;
+            margin-top: 30px;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            transition: all 0.15s ease-in-out;
+        }
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: #0056b3;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        .btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #c3e6cb;
+        }
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+        }
+        .form-description {
+            color: #6c757d;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+        .required {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        function CreateEventForm() {
+            const [title, setTitle] = useState('');
+            const [description, setDescription] = useState('');
+            const [isSubmitting, setIsSubmitting] = useState(false);
+            const [message, setMessage] = useState('');
+            const [messageType, setMessageType] = useState(''); // 'success' or 'error'
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                
+                if (!title.trim()) {
+                    setMessage('Title is required');
+                    setMessageType('error');
+                    return;
+                }
+
+                setIsSubmitting(true);
+                setMessage('');
+
+                try {
+                    const response = await fetch('/api/events', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            title: title.trim(),
+                            description: description.trim()
+                        }),
+                    });
+
+                    if (response.ok) {
+                        const createdEvent = await response.json();
+                        setTitle('');
+                        setDescription('');
+                        setMessage(`Event "${createdEvent.title}" created successfully! It should appear in the dashboard stream within 2 seconds.`);
+                        setMessageType('success');
+                        setTimeout(() => {
+                            setMessage('');
+                            setMessageType('');
+                        }, 5000);
+                    } else {
+                        throw new Error(`Server responded with status ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error('Error creating event:', error);
+                    setMessage('Failed to create event. Please check your connection and try again.');
+                    setMessageType('error');
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+
+            const handleReset = () => {
+                setTitle('');
+                setDescription('');
+                setMessage('');
+                setMessageType('');
+            };
+
+            return (
+                <div className="container">
+                    <div className="header">
+                        <h1>Create New Event</h1>
+                    </div>
+                    <div className="nav">
+                        <a href="/">← Back to Dashboard</a>
+                        <span className="current">Create Event</span>
+                    </div>
+                    <div className="form-container">
+                        <p className="form-description">
+                            Create a new event that will be immediately added to the database and appear in the real-time event stream. 
+                            All connected clients will see your event within 2 seconds.
+                        </p>
+
+                        {message && (
+                            <div className={messageType === 'success' ? 'success-message' : 'error-message'}>
+                                {message}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSubmit}>
+                            <div className="form-group">
+                                <label htmlFor="title">
+                                    Event Title <span className="required">*</span>
+                                </label>
+                                <input
+                                    id="title"
+                                    type="text"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    placeholder="Enter a descriptive title for your event"
+                                    disabled={isSubmitting}
+                                    maxLength="255"
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="description">Description</label>
+                                <textarea
+                                    id="description"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    placeholder="Provide additional details about the event (optional)"
+                                    disabled={isSubmitting}
+                                    rows="4"
+                                />
+                            </div>
+
+                            <div className="form-actions">
+                                <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                                    {isSubmitting ? 'Creating Event...' : 'Create Event'}
+                                </button>
+                                <button type="button" className="btn btn-secondary" onClick={handleReset} disabled={isSubmitting}>
+                                    Clear Form
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<CreateEventForm />, document.getElementById('root'));
+    </script>
+</body>
+</html>
