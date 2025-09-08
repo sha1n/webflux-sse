@@ -6,6 +6,8 @@ function EventDashboard() {
 
     useEffect(() => {
         const eventSource = new EventSource('/api/events/stream');
+        let currentBatch = [];
+        let batchTimeout = null;
 
         eventSource.onopen = () => {
             setConnectionStatus('connected');
@@ -13,14 +15,23 @@ function EventDashboard() {
 
         eventSource.onmessage = (event) => {
             try {
-                const newEvent = JSON.parse(event.data);
-                setEvents(prevEvents => {
-                    const exists = prevEvents.some(e => e.id === newEvent.id);
-                    if (!exists) {
-                        return [newEvent, ...prevEvents].slice(0, 100);
-                    }
-                    return prevEvents;
-                });
+                const eventData = JSON.parse(event.data);
+                
+                // Add event to current batch
+                currentBatch.push(eventData);
+                
+                // Clear any existing timeout
+                if (batchTimeout) {
+                    clearTimeout(batchTimeout);
+                }
+                
+                // Set a timeout to process the batch after events stop coming
+                batchTimeout = setTimeout(() => {
+                    // Events are already in DESC order from DB, so keep them in that order
+                    setEvents(currentBatch.slice(0, 100));
+                    currentBatch = []; // Clear batch for next cycle
+                }, 100); // Wait 100ms after last event to process batch
+                
             } catch (error) {
                 console.error('Error parsing event data:', error);
             }
@@ -31,6 +42,9 @@ function EventDashboard() {
         };
 
         return () => {
+            if (batchTimeout) {
+                clearTimeout(batchTimeout);
+            }
             eventSource.close();
         };
     }, []);
