@@ -3,11 +3,13 @@ package com.example.webfluxsse.service;
 import com.example.webfluxsse.model.Event;
 import com.example.webfluxsse.repository.elasticsearch.EventElasticsearchRepository;
 import com.example.webfluxsse.repository.r2dbc.UserEventPermissionRepository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
+@ConditionalOnProperty(name = "spring.elasticsearch.uris")
 public class SearchService {
     
     private final EventElasticsearchRepository elasticsearchRepository;

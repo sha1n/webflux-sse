@@ -2,7 +2,7 @@ package com.example.webfluxsse.controller;
 
 import com.example.webfluxsse.model.Event;
 import com.example.webfluxsse.repository.r2dbc.EventRepository;
-import com.example.webfluxsse.repository.elasticsearch.EventElasticsearchRepository;
+import com.example.webfluxsse.service.DualPersistenceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -12,18 +12,17 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Optional;
 
 @RestController
 public class EventController {
 
     private final EventRepository eventRepository;
-    private final Optional<EventElasticsearchRepository> elasticsearchRepository;
+    private final DualPersistenceService dualPersistenceService;
 
     public EventController(EventRepository eventRepository, 
-                          @Autowired(required = false) EventElasticsearchRepository elasticsearchRepository) {
+                          @Autowired(required = false) DualPersistenceService dualPersistenceService) {
         this.eventRepository = eventRepository;
-        this.elasticsearchRepository = Optional.ofNullable(elasticsearchRepository);
+        this.dualPersistenceService = dualPersistenceService;
     }
 
     @GetMapping(value = "/api/events/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -42,19 +41,12 @@ public class EventController {
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<Event> createEvent(@RequestBody CreateEventRequest request) {
         Event event = new Event(LocalDateTime.now(), request.title(), request.description());
-        return eventRepository.save(event)
-                .flatMap(savedEvent -> {
-                    if (elasticsearchRepository.isPresent()) {
-                        return elasticsearchRepository.get().save(savedEvent)
-                                .onErrorResume(error -> {
-                                    // Log error but don't fail the request
-                                    System.err.println("Failed to index event in Elasticsearch: " + error.getMessage());
-                                    return Mono.just(savedEvent);
-                                });
-                    } else {
-                        return Mono.just(savedEvent);
-                    }
-                });
+        
+        if (dualPersistenceService != null) {
+            return dualPersistenceService.saveEvent(event);
+        } else {
+            return eventRepository.save(event);
+        }
     }
 
     public record CreateEventRequest(String title, String description) {}
