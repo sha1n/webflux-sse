@@ -1,0 +1,78 @@
+/* Dashboard-specific styles */
+
+.container {
+    max-width: 1200px;
+}
+
+.status {
+    padding: 10px 20px;
+    background: #e9ecef;
+    border-bottom: 1px solid #dee2e6;
+    font-size: 14px;
+}
+
+.connected {
+    color: #28a745;
+}
+
+.disconnected {
+    color: #dc3545;
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #dee2e6;
+}
+
+th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+tr:hover {
+    background-color: #f8f9fa;
+}
+
+.timestamp {
+    white-space: nowrap;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+}
+
+.title {
+    font-weight: 500;
+}
+
+.description {
+    color: #666;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}
+
+/* Dashboard-specific navigation styling */
+.nav a {
+    padding: 8px 16px;
+    background: #007bff;
+    color: white;
+    border-radius: 4px;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.nav a:hover {
+    background: #0056b3;
+    text-decoration: none;
+}
