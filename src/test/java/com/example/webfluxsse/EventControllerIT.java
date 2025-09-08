@@ -14,6 +14,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.elasticsearch.ElasticsearchContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.core.publisher.Flux;
@@ -26,7 +27,7 @@ import java.time.LocalDateTime;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "spring.profiles.active=it")
 @AutoConfigureWebTestClient
 @Testcontainers
-@DisplayName("Event Controller Integration Tests with PostgreSQL Testcontainers")
+@DisplayName("Event Controller Integration Tests with PostgreSQL and Elasticsearch Testcontainers")
 class EventControllerIT {
 
     @Container
@@ -36,14 +37,25 @@ class EventControllerIT {
             .withPassword("testpass")
             .withInitScript("init-test-db.sql");
 
+    @Container
+    static ElasticsearchContainer elasticsearch = new ElasticsearchContainer("docker.elastic.co/elasticsearch/elasticsearch:8.8.0")
+            .withEnv("discovery.type", "single-node")
+            .withEnv("xpack.security.enabled", "false")
+            .withStartupTimeout(Duration.ofMinutes(2));
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
+        // PostgreSQL configuration
         registry.add("spring.r2dbc.url", () -> {
             String jdbcUrl = postgres.getJdbcUrl();
             return jdbcUrl.replace("jdbc:postgresql://", "r2dbc:postgresql://");
         });
         registry.add("spring.r2dbc.username", postgres::getUsername);
         registry.add("spring.r2dbc.password", postgres::getPassword);
+        
+        // Elasticsearch configuration
+        registry.add("spring.elasticsearch.uris", () -> 
+            "http://" + elasticsearch.getHost() + ":" + elasticsearch.getFirstMappedPort());
     }
 
     @Autowired
