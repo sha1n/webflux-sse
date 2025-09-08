@@ -14,7 +14,7 @@ public class Event {
     @Id
     private Long id;
     
-    @Field(type = FieldType.Date)
+    @Field(type = FieldType.Date, format = {}, pattern = "uuuu-MM-dd'T'HH:mm:ss")
     private LocalDateTime timestamp;
     
     @Field(type = FieldType.Text, analyzer = "standard")

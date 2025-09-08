@@ -1,4 +1,4 @@
-package com.example.webfluxsse.repository;
+package com.example.webfluxsse.repository.elasticsearch;
 
 import com.example.webfluxsse.model.Event;
 import org.springframework.data.elasticsearch.repository.ReactiveElasticsearchRepository;

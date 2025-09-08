@@ -1,7 +1,7 @@
 package com.example.webfluxsse;
 
 import com.example.webfluxsse.model.Event;
-import com.example.webfluxsse.repository.EventRepository;
+import com.example.webfluxsse.repository.r2dbc.EventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

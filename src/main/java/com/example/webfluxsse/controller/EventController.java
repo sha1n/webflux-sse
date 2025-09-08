@@ -1,8 +1,8 @@
 package com.example.webfluxsse.controller;
 
 import com.example.webfluxsse.model.Event;
-import com.example.webfluxsse.repository.EventRepository;
-import com.example.webfluxsse.repository.EventElasticsearchRepository;
+import com.example.webfluxsse.repository.r2dbc.EventRepository;
+import com.example.webfluxsse.repository.elasticsearch.EventElasticsearchRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
