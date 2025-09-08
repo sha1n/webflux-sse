@@ -13,7 +13,7 @@ public class SearchService {
     private final EventElasticsearchRepository elasticsearchRepository;
     private final UserEventPermissionRepository permissionRepository;
     
-    public SearchService(EventElasticsearchRepository elasticsearchRepository, 
+    public SearchService(EventElasticsearchRepository elasticsearchRepository,
                         UserEventPermissionRepository permissionRepository) {
         this.elasticsearchRepository = elasticsearchRepository;
         this.permissionRepository = permissionRepository;

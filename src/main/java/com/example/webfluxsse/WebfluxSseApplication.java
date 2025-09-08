@@ -6,11 +6,7 @@ import org.springframework.boot.autoconfigure.data.elasticsearch.ElasticsearchDa
 import org.springframework.boot.autoconfigure.data.elasticsearch.ElasticsearchRepositoriesAutoConfiguration;
 import org.springframework.boot.autoconfigure.data.elasticsearch.ReactiveElasticsearchRepositoriesAutoConfiguration;
 
-@SpringBootApplication(exclude = {
-    ElasticsearchDataAutoConfiguration.class,
-    ElasticsearchRepositoriesAutoConfiguration.class,
-    ReactiveElasticsearchRepositoriesAutoConfiguration.class
-})
+@SpringBootApplication
 public class WebfluxSseApplication {
 
     public static void main(String[] args) {
