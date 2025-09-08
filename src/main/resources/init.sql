@@ -6,6 +6,14 @@ CREATE TABLE IF NOT EXISTS events (
     description TEXT
 );
 
+-- Create the user event permissions table
+CREATE TABLE IF NOT EXISTS user_event_permissions (
+    id BIGSERIAL PRIMARY KEY,
+    event_id BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    user_id VARCHAR(255) NOT NULL,
+    UNIQUE(event_id, user_id)
+);
+
 -- Insert sample data
 INSERT INTO events (timestamp, title, description) VALUES 
     (CURRENT_TIMESTAMP - INTERVAL '1 hour', 'System Startup', 'Application started successfully'),
