@@ -43,6 +43,15 @@ tr:hover {
     background-color: #f8f9fa;
 }
 
+.event-id {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: #007bff;
+    font-weight: 500;
+    white-space: nowrap;
+    width: 80px;
+}
+
 .timestamp {
     white-space: nowrap;
     font-family: 'Courier New', monospace;

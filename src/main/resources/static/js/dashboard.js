@@ -78,6 +78,7 @@ function EventDashboard() {
                     <table>
                         <thead>
                             <tr>
+                                <th>ID</th>
                                 <th>Timestamp</th>
                                 <th>Title</th>
                                 <th>Description</th>
@@ -86,6 +87,7 @@ function EventDashboard() {
                         <tbody>
                             {events.map((event) => (
                                 <tr key={event.id}>
+                                    <td className="event-id">{event.id}</td>
                                     <td className="timestamp">{formatTimestamp(event.timestamp)}</td>
                                     <td className="title">{event.title}</td>
                                     <td className="description">{event.description}</td>
