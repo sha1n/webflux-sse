@@ -1,16 +1,26 @@
 package com.example.webfluxsse.model;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.elasticsearch.annotations.Document;
+import org.springframework.data.elasticsearch.annotations.Field;
+import org.springframework.data.elasticsearch.annotations.FieldType;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDateTime;
 
 @Table("events")
+@Document(indexName = "events")
 public class Event {
     @Id
     private Long id;
+    
+    @Field(type = FieldType.Date)
     private LocalDateTime timestamp;
+    
+    @Field(type = FieldType.Text, analyzer = "standard")
     private String title;
+    
+    @Field(type = FieldType.Text, analyzer = "standard")
     private String description;
 
     public Event() {}
