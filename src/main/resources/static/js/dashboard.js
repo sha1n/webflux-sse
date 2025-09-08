@@ -68,6 +68,7 @@ function EventDashboard() {
             </div>
             <div className="nav">
                 <a href="/create.html">+ Create New Event</a>
+                <a href="/permissions.html">Manage Permissions</a>
             </div>
             <div className="table-container">
                 {events.length === 0 ? (

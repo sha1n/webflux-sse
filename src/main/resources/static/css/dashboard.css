@@ -73,15 +73,31 @@ tr:hover {
 }
 
 /* Dashboard-specific navigation styling */
+.nav {
+    display: flex;
+    gap: 12px;
+}
+
 .nav a {
     padding: 8px 16px;
-    background: #007bff;
     color: white;
     border-radius: 4px;
     transition: background-color 0.15s ease-in-out;
+    text-decoration: none;
 }
 
-.nav a:hover {
+.nav a:first-child {
+    background: #007bff;
+}
+
+.nav a:first-child:hover {
     background: #0056b3;
-    text-decoration: none;
+}
+
+.nav a:not(:first-child) {
+    background: #6c757d;
+}
+
+.nav a:not(:first-child):hover {
+    background: #545b62;
 }
