@@ -33,8 +33,8 @@ public class PermissionController {
     }
     
     @GetMapping("/event/{eventId}/users")
-    public Flux<String> getUsersForEvent(@PathVariable Long eventId) {
-        return permissionRepository.findUserIdsByEventId(eventId);
+    public Mono<java.util.List<String>> getUsersForEvent(@PathVariable Long eventId) {
+        return permissionRepository.findUserIdsByEventId(eventId).collectList();
     }
     
     @GetMapping("/user/{userId}/events")
