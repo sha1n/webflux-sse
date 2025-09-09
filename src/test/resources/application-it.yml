@@ -1,4 +1,7 @@
 spring:
+  main:
+    banner-mode: off
+
   sql:
     init:
       mode: never

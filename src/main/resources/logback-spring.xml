@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <springProperty scope="context" name="log.level.default" source="log.level" defaultValue="WARN"/>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <Pattern>
+                %d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n
+            </Pattern>
+        </layout>
+    </appender>
 
     <logger name="com.example.webfluxsse" level="INFO"/>
 
-    <root level="WARN">
-        <appender-ref ref="CONSOLE"/>
+    <root level="${log.level.default}">
+        <appender-ref ref="STDOUT" />
     </root>
 </configuration>

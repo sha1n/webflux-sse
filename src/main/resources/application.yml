@@ -14,5 +14,5 @@ server:
 
 logging:
   level:
-    org.springframework.r2dbc: DEBUG
-    io.r2dbc.postgresql.QUERY: DEBUG
+    org.springframework.r2dbc: WARN
+    io.r2dbc.postgresql.QUERY: WARN
