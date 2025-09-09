@@ -50,8 +50,4 @@ public class SearchService {
             .hasElement();
     }
     
-    public Flux<Event> streamSearchResults(String query, String userId) {
-        return searchEventsForUser(query, userId)
-            .take(100); // Limit results for streaming
-    }
 }

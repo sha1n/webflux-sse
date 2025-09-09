@@ -6,8 +6,6 @@ function SearchApp() {
     const [results, setResults] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    const [isStreaming, setIsStreaming] = useState(false);
-    const [eventSource, setEventSource] = useState(null);
 
     const handleSearch = async (e) => {
         if (e) e.preventDefault();
@@ -17,21 +15,11 @@ function SearchApp() {
             return;
         }
 
-        // Close existing stream if any
-        if (eventSource) {
-            eventSource.close();
-            setEventSource(null);
-        }
-
         setIsLoading(true);
         setError('');
         setResults([]);
-
-        if (isStreaming) {
-            startStreamSearch();
-        } else {
-            await performRegularSearch();
-        }
+        
+        await performRegularSearch();
     };
 
     const performRegularSearch = async () => {
@@ -59,50 +47,8 @@ function SearchApp() {
         }
     };
 
-    const startStreamSearch = () => {
-        const url = new URL('/api/search/stream', window.location.origin);
-        if (query) url.searchParams.set('q', query);
-
-        const stream = new EventSource(url, {
-            headers: {
-                'X-User-Id': userId
-            }
-        });
-
-        stream.onmessage = (event) => {
-            try {
-                const document = JSON.parse(event.data);
-                setResults(prev => {
-                    const exists = prev.some(doc => doc.id === document.id);
-                    if (!exists) {
-                        return [...prev, document];
-                    }
-                    return prev;
-                });
-                setIsLoading(false);
-            } catch (err) {
-                console.error('Error parsing stream data:', err);
-            }
-        };
-
-        stream.onopen = () => {
-            setIsLoading(false);
-        };
-
-        stream.onerror = () => {
-            setError('Stream connection failed');
-            setIsLoading(false);
-            stream.close();
-        };
-
-        setEventSource(stream);
-    };
 
     const clearSearch = () => {
-        if (eventSource) {
-            eventSource.close();
-            setEventSource(null);
-        }
         setQuery('');
         setResults([]);
         setError('');
@@ -113,13 +59,6 @@ function SearchApp() {
         return new Date(dateString).toLocaleString();
     };
 
-    useEffect(() => {
-        return () => {
-            if (eventSource) {
-                eventSource.close();
-            }
-        };
-    }, [eventSource]);
 
     return (
         <div className="container">
@@ -168,17 +107,6 @@ function SearchApp() {
                             </button>
                         </div>
                     </div>
-                    <div style={{marginTop: '15px'}}>
-                        <label className="stream-toggle">
-                            <input
-                                type="checkbox"
-                                checked={isStreaming}
-                                onChange={(e) => setIsStreaming(e.target.checked)}
-                                disabled={isLoading}
-                            />
-                            Use streaming search (SSE)
-                        </label>
-                    </div>
                 </form>
 
                 {error && (
@@ -193,11 +121,6 @@ function SearchApp() {
                             {results.length} event{results.length !== 1 ? 's' : ''} found
                             {userId && ` for user: ${userId}`}
                         </div>
-                        {isStreaming && eventSource && (
-                            <div style={{color: '#28a745', fontSize: '14px'}}>
-                                ● Streaming active
-                            </div>
-                        )}
                     </div>
 
                     {isLoading && (

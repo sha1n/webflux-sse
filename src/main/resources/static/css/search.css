@@ -111,16 +111,6 @@
     font-size: 14px;
 }
 
-.stream-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-}
-
-.stream-toggle input[type="checkbox"] {
-    width: auto;
-}
 
 .document-grid {
     display: grid;

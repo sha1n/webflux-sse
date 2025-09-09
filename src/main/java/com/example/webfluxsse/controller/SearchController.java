@@ -22,9 +22,4 @@ public class SearchController {
         return searchService.searchEventsForUser(q, userId);
     }
     
-    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<Event> searchStream(@RequestParam(required = false) String q,
-                                   @RequestHeader("X-User-Id") String userId) {
-        return searchService.streamSearchResults(q, userId);
-    }
 }

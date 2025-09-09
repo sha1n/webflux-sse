@@ -207,30 +207,4 @@ class SearchPOCIntegrationIT {
                 .hasSize(0);
     }
 
-    @Test
-    @DisplayName("Should provide streaming search results via SSE")
-    void shouldProvideStreamingSearchResultsViaSSE() throws InterruptedException {
-        // Create and index events
-        Event event1 = eventRepository.save(new Event(LocalDateTime.now(), "Stream Test 1", "First event")).block();
-        Event event2 = eventRepository.save(new Event(LocalDateTime.now(), "Stream Test 2", "Second event")).block();
-        
-        elasticsearchRepository.save(event1).block();
-        elasticsearchRepository.save(event2).block();
-        
-        // Wait for indexing
-        Thread.sleep(2000);
-
-        // Grant permissions to user1
-        permissionRepository.save(new UserEventPermission(event1.getId(), "user1")).block();
-        permissionRepository.save(new UserEventPermission(event2.getId(), "user1")).block();
-
-        // Test SSE endpoint
-        webTestClient.get()
-                .uri("/api/search/stream?q=Stream")
-                .header("X-User-Id", "user1")
-                .accept(MediaType.TEXT_EVENT_STREAM)
-                .exchange()
-                .expectStatus().isOk()
-                .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM);
-    }
 }
