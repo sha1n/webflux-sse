@@ -321,4 +321,95 @@ class PermissionControllerIT {
                 .exchange()
                 .expectStatus().is5xxServerError(); // Should fail due to unique constraint
     }
+
+    @Test
+    @DisplayName("Should grant permissions for multiple events at once")
+    void shouldGrantPermissionsForMultipleEvents() {
+        Event event1 = eventRepository.save(new Event(LocalDateTime.now(), "Test Event 1", "Description 1")).block();
+        Event event2 = eventRepository.save(new Event(LocalDateTime.now(), "Test Event 2", "Description 2")).block();
+        Event event3 = eventRepository.save(new Event(LocalDateTime.now(), "Test Event 3", "Description 3")).block();
+
+        PermissionController.GrantMultiplePermissionsRequest request = 
+            new PermissionController.GrantMultiplePermissionsRequest(
+                java.util.List.of(event1.getId(), event2.getId(), event3.getId()), 
+                "user1"
+            );
+
+        webTestClient.post()
+                .uri("/api/permissions/bulk")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBodyList(UserEventPermission.class)
+                .hasSize(3)
+                .value(permissions -> {
+                    // Verify all three events have permissions for user1
+                    java.util.Set<Long> eventIds = permissions.stream()
+                        .map(UserEventPermission::getEventId)
+                        .collect(java.util.stream.Collectors.toSet());
+                    assert eventIds.contains(event1.getId());
+                    assert eventIds.contains(event2.getId());
+                    assert eventIds.contains(event3.getId());
+                    
+                    // Verify all permissions are for user1
+                    assert permissions.stream().allMatch(p -> "user1".equals(p.getUserId()));
+                });
+
+        // Verify permissions were saved by checking user's permissions
+        webTestClient.get()
+                .uri("/api/permissions/user/user1")
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBodyList(UserEventPermission.class)
+                .hasSize(3);
+    }
+
+    @Test
+    @DisplayName("Should handle partial failure when granting multiple permissions")
+    void shouldHandlePartialFailureForMultiplePermissions() {
+        Event event1 = eventRepository.save(new Event(LocalDateTime.now(), "Test Event 1", "Description 1")).block();
+        Event event2 = eventRepository.save(new Event(LocalDateTime.now(), "Test Event 2", "Description 2")).block();
+        Event event3 = eventRepository.save(new Event(LocalDateTime.now(), "Test Event 3", "Description 3")).block();
+        
+        // Pre-create permission for event1 only
+        permissionRepository.save(new UserEventPermission(event1.getId(), "user1")).block();
+
+        PermissionController.GrantMultiplePermissionsRequest request = 
+            new PermissionController.GrantMultiplePermissionsRequest(
+                java.util.List.of(event1.getId(), event2.getId(), event3.getId()), 
+                "user1"
+            );
+
+        // The current implementation continues processing and only grants permissions that don't exist
+        webTestClient.post()
+                .uri("/api/permissions/bulk")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBodyList(UserEventPermission.class)
+                .hasSize(2) // Should only create permissions for event2 and event3 (event1 already exists)
+                .value(permissions -> {
+                    java.util.Set<Long> eventIds = permissions.stream()
+                        .map(UserEventPermission::getEventId)
+                        .collect(java.util.stream.Collectors.toSet());
+                    assert eventIds.contains(event2.getId());
+                    assert eventIds.contains(event3.getId());
+                    assert !eventIds.contains(event1.getId()); // Should not include the duplicate
+                    
+                    // Verify all permissions are for user1
+                    assert permissions.stream().allMatch(p -> "user1".equals(p.getUserId()));
+                });
+
+        // Verify total permissions count - should have all 3
+        webTestClient.get()
+                .uri("/api/permissions/user/user1")
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBodyList(UserEventPermission.class)
+                .hasSize(3); // All three permissions should exist (1 pre-existing + 2 new)
+    }
 }

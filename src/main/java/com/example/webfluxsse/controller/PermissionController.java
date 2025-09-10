@@ -77,6 +77,27 @@ public class PermissionController {
                 eventId, userId, response.hasPermission()));
     }
     
+    @PostMapping("/bulk")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Flux<UserEventPermission> grantMultiplePermissions(@RequestBody GrantMultiplePermissionsRequest request) {
+        log.info("Granting permissions for multiple events: eventIds={}, userId={}", 
+            request.eventIds(), request.userId());
+        
+        return Flux.fromIterable(request.eventIds())
+                .map(eventId -> new UserEventPermission(eventId, request.userId()))
+                .flatMap(permission -> 
+                    permissionRepository.save(permission)
+                        .onErrorResume(error -> {
+                            log.warn("Permission already exists for eventId={}, userId={}, skipping", 
+                                permission.getEventId(), permission.getUserId());
+                            return Mono.empty(); // Skip duplicate permissions
+                        })
+                )
+                .doOnNext(savedPermission -> log.info("Successfully granted permission with id={}", savedPermission.getId()))
+                .doOnComplete(() -> log.info("Completed bulk permission grant for userId={}", request.userId()));
+    }
+    
     public record GrantPermissionRequest(Long eventId, String userId) {}
+    public record GrantMultiplePermissionsRequest(java.util.List<Long> eventIds, String userId) {}
     public record PermissionCheckResponse(Long eventId, String userId, boolean hasPermission) {}
 }

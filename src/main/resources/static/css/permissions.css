@@ -36,6 +36,36 @@
     box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
+.form-group input[type="checkbox"] {
+    width: auto;
+    margin-right: 8px;
+    transform: scale(1.2);
+}
+
+.event-input-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.bulk-mode-toggle {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 400;
+    font-size: 14px;
+    color: #6c757d;
+    margin: 0;
+}
+
+.bulk-mode-toggle input[type="checkbox"] {
+    width: auto;
+    margin-right: 6px;
+    margin-left: 0;
+    transform: scale(1.1);
+}
+
 .form-actions {
     display: flex;
     gap: 12px;
