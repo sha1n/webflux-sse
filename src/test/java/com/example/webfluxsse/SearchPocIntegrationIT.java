@@ -20,6 +20,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.elasticsearch.ElasticsearchContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import reactor.core.publisher.Flux;
+import reactor.test.StepVerifier;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -28,7 +30,7 @@ import java.time.LocalDateTime;
 @AutoConfigureWebTestClient
 @Testcontainers
 @DisplayName("Search POC Integration Tests with PostgreSQL and Elasticsearch Testcontainers")
-class SearchPOCIntegrationIT {
+class SearchPocIntegrationIT {
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
@@ -122,19 +124,18 @@ class SearchPOCIntegrationIT {
                 .expectStatus().isCreated();
 
         // Search for the event as user1
-        webTestClient.get()
+        Flux<Event> responseBody = webTestClient.get()
                 .uri("/api/search?q=test")
                 .header("X-User-Id", "user1")
-                .accept(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_NDJSON)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Event.class)
-                .hasSize(1)
-                .consumeWith(result -> {
-                    var events = result.getResponseBody();
-                    assert events != null;
-                    assert events.get(0).getTitle().equals("Test Event");
-                });
+                .returnResult(Event.class)
+                .getResponseBody();
+
+        StepVerifier.create(responseBody)
+                .expectNextMatches(event -> event.getTitle().equals("Test Event"))
+                .verifyComplete();
     }
 
     @Test
@@ -156,34 +157,32 @@ class SearchPOCIntegrationIT {
         permissionRepository.save(new UserEventPermission(event2.getId(), "user2")).block();
 
         // Search as user1 - should only see event1
-        webTestClient.get()
+        Flux<Event> user1Response = webTestClient.get()
                 .uri("/api/search?q=Event")
                 .header("X-User-Id", "user1")
-                .accept(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_NDJSON)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Event.class)
-                .hasSize(1)
-                .consumeWith(result -> {
-                    var events = result.getResponseBody();
-                    assert events != null;
-                    assert events.get(0).getTitle().equals("Public Event");
-                });
+                .returnResult(Event.class)
+                .getResponseBody();
+
+        StepVerifier.create(user1Response)
+                .expectNextMatches(event -> event.getTitle().equals("Public Event"))
+                .verifyComplete();
 
         // Search as user2 - should only see event2
-        webTestClient.get()
+        Flux<Event> user2Response = webTestClient.get()
                 .uri("/api/search?q=Event")
                 .header("X-User-Id", "user2")
-                .accept(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_NDJSON)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Event.class)
-                .hasSize(1)
-                .consumeWith(result -> {
-                    var events = result.getResponseBody();
-                    assert events != null;
-                    assert events.get(0).getTitle().equals("Private Event");
-                });
+                .returnResult(Event.class)
+                .getResponseBody();
+
+        StepVerifier.create(user2Response)
+                .expectNextMatches(event -> event.getTitle().equals("Private Event"))
+                .verifyComplete();
     }
 
     @Test
@@ -197,14 +196,17 @@ class SearchPOCIntegrationIT {
         Thread.sleep(2000);
 
         // Search as user3 who has no permissions
-        webTestClient.get()
+        Flux<Event> user3Response = webTestClient.get()
                 .uri("/api/search?q=Test")
                 .header("X-User-Id", "user3")
-                .accept(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_NDJSON)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(Event.class)
-                .hasSize(0);
+                .returnResult(Event.class)
+                .getResponseBody();
+
+        StepVerifier.create(user3Response)
+                .verifyComplete();
     }
 
 }

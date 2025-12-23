@@ -9,7 +9,7 @@ function SearchApp() {
 
     const handleSearch = async (e) => {
         if (e) e.preventDefault();
-        
+
         if (!userId) {
             setError('Please select a user ID');
             return;
@@ -18,7 +18,7 @@ function SearchApp() {
         setIsLoading(true);
         setError('');
         setResults([]);
-        
+
         await performRegularSearch();
     };
 
@@ -26,11 +26,11 @@ function SearchApp() {
         try {
             const url = new URL('/api/search', window.location.origin);
             if (query) url.searchParams.set('q', query);
-            
+
             const response = await fetch(url, {
                 headers: {
                     'X-User-Id': userId,
-                    'Accept': 'application/json'
+                    'Accept': 'application/x-ndjson'
                 }
             });
 
@@ -38,8 +38,34 @@ function SearchApp() {
                 throw new Error(`Search failed: ${response.status} ${response.statusText}`);
             }
 
-            const data = await response.json();
-            setResults(Array.isArray(data) ? data : []);
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+
+                // Process all complete lines
+                buffer = lines.pop(); // Keep the last partial line in buffer
+
+                const newEvents = lines
+                    .filter(line => line.trim())
+                    .map(line => JSON.parse(line));
+
+                if (newEvents.length > 0) {
+                    setResults(prev => [...prev, ...newEvents]);
+                }
+            }
+
+            // Process any remaining data
+            if (buffer && buffer.trim()) {
+                setResults(prev => [...prev, JSON.parse(buffer)]);
+            }
+
         } catch (err) {
             setError(err.message);
         } finally {
@@ -83,7 +109,7 @@ function SearchApp() {
                                 disabled={isLoading}
                             />
                         </div>
-                        <div className="search-field" style={{minWidth: '150px', flex: '0 0 150px'}}>
+                        <div className="search-field" style={{ minWidth: '150px', flex: '0 0 150px' }}>
                             <label htmlFor="userId">User ID</label>
                             <select
                                 id="userId"
