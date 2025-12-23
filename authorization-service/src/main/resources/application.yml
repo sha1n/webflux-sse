@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: authorization-service
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/eventdb
+    username: postgres
+    password: password
+  sql:
+    init:
+      mode: never
+
+server:
+  port: 8082
+
+logging:
+  level:
+    org.springframework.r2dbc: WARN
+    io.r2dbc.postgresql.QUERY: WARN

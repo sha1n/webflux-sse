@@ -7,16 +7,25 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🛑 Stopping WebFlux SSE Application${NC}"
+echo -e "${BLUE}🛑 Stopping WebFlux SSE Services${NC}"
 echo
 
-# Stop Spring Boot application (if running via Maven)
-echo -e "${YELLOW}🔧 Stopping Spring Boot application...${NC}"
-pkill -f "spring-boot:run" > /dev/null 2>&1
+# Stop authorization-service
+echo -e "${YELLOW}🔧 Stopping authorization-service...${NC}"
+pkill -f "authorization-service.*spring-boot:run" > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ Spring Boot application stopped${NC}"
+    echo -e "${GREEN}✅ Authorization-service stopped${NC}"
 else
-    echo -e "${YELLOW}ℹ️  No running Spring Boot application found${NC}"
+    echo -e "${YELLOW}ℹ️  No running authorization-service found${NC}"
+fi
+
+# Stop search-service
+echo -e "${YELLOW}🔧 Stopping search-service...${NC}"
+pkill -f "search-service.*spring-boot:run" > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Search-service stopped${NC}"
+else
+    echo -e "${YELLOW}ℹ️  No running search-service found${NC}"
 fi
 
 # Stop Docker containers
