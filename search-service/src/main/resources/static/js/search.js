@@ -24,14 +24,18 @@ function SearchApp() {
 
     const performRegularSearch = async () => {
         try {
-            const url = new URL('/api/search', window.location.origin);
-            if (query) url.searchParams.set('q', query);
+            const url = new URL('/api/rpc/v1/search', window.location.origin);
 
             const response = await fetch(url, {
+                method: 'POST',
                 headers: {
-                    'X-User-Id': userId,
+                    'Content-Type': 'application/json',
                     'Accept': 'application/x-ndjson'
-                }
+                },
+                body: JSON.stringify({
+                    query: query || null,
+                    userId: userId
+                })
             });
 
             if (!response.ok) {

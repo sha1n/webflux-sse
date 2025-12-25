@@ -1,7 +1,8 @@
 package com.example.webfluxsse.authorization;
 
-import com.example.webfluxsse.authorization.controller.PermissionController;
 import com.example.webfluxsse.authorization.api.model.UserEventPermission;
+import com.example.webfluxsse.authorization.controller.PermissionController;
+import com.example.webfluxsse.authorization.model.UserEventPermissionEntity;
 import com.example.webfluxsse.authorization.repository.UserEventPermissionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -14,11 +15,10 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "spring.profiles.active=it")
@@ -93,12 +93,12 @@ class PermissionControllerIT {
         Long event1Id = createEvent("Test Event 1", "Description 1");
         Long event2Id = createEvent("Test Event 2", "Description 2");
         
-        permissionRepository.save(new UserEventPermission(event1Id, "user1")).block();
-        permissionRepository.save(new UserEventPermission(event2Id, "user2")).block();
-        permissionRepository.save(new UserEventPermission(event1Id, "user2")).block();
+        permissionRepository.save(new UserEventPermissionEntity(event1Id, "user1")).block();
+        permissionRepository.save(new UserEventPermissionEntity(event2Id, "user2")).block();
+        permissionRepository.save(new UserEventPermissionEntity(event1Id, "user2")).block();
 
         webTestClient.get()
-                .uri("/api/permissions")
+                .uri("/api/v1/permissions")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -112,12 +112,12 @@ class PermissionControllerIT {
         Long event1Id = createEvent("Test Event 1", "Description 1");
         Long event2Id = createEvent("Test Event 2", "Description 2");
         
-        permissionRepository.save(new UserEventPermission(event1Id, "user1")).block();
-        permissionRepository.save(new UserEventPermission(event2Id, "user1")).block();
-        permissionRepository.save(new UserEventPermission(event1Id, "user2")).block();
+        permissionRepository.save(new UserEventPermissionEntity(event1Id, "user1")).block();
+        permissionRepository.save(new UserEventPermissionEntity(event2Id, "user1")).block();
+        permissionRepository.save(new UserEventPermissionEntity(event1Id, "user2")).block();
 
         webTestClient.get()
-                .uri("/api/permissions/user/user1")
+                .uri("/api/v1/permissions/user/user1")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -131,12 +131,12 @@ class PermissionControllerIT {
         Long event1Id = createEvent("Test Event 1", "Description 1");
         Long event2Id = createEvent("Test Event 2", "Description 2");
         
-        permissionRepository.save(new UserEventPermission(event1Id, "user1")).block();
-        permissionRepository.save(new UserEventPermission(event1Id, "user2")).block();
-        permissionRepository.save(new UserEventPermission(event2Id, "user3")).block();
+        permissionRepository.save(new UserEventPermissionEntity(event1Id, "user1")).block();
+        permissionRepository.save(new UserEventPermissionEntity(event1Id, "user2")).block();
+        permissionRepository.save(new UserEventPermissionEntity(event2Id, "user3")).block();
 
         webTestClient.get()
-                .uri("/api/permissions/event/" + event1Id)
+                .uri("/api/v1/permissions/event/" + event1Id)
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -149,12 +149,12 @@ class PermissionControllerIT {
     void shouldGetUsersForEvent() {
         Long eventId = createEvent("Test Event", "Description");
         
-        permissionRepository.save(new UserEventPermission(eventId, "user1")).block();
-        permissionRepository.save(new UserEventPermission(eventId, "user2")).block();
-        permissionRepository.save(new UserEventPermission(eventId, "user3")).block();
+        permissionRepository.save(new UserEventPermissionEntity(eventId, "user1")).block();
+        permissionRepository.save(new UserEventPermissionEntity(eventId, "user2")).block();
+        permissionRepository.save(new UserEventPermissionEntity(eventId, "user3")).block();
 
         webTestClient.get()
-                .uri("/api/permissions/event/" + eventId + "/users")
+                .uri("/api/v1/permissions/event/" + eventId + "/users")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -174,12 +174,12 @@ class PermissionControllerIT {
         Long event2Id = createEvent("Test Event 2", "Description 2");
         Long event3Id = createEvent("Test Event 3", "Description 3");
         
-        permissionRepository.save(new UserEventPermission(event1Id, "user1")).block();
-        permissionRepository.save(new UserEventPermission(event2Id, "user1")).block();
-        permissionRepository.save(new UserEventPermission(event3Id, "user2")).block();
+        permissionRepository.save(new UserEventPermissionEntity(event1Id, "user1")).block();
+        permissionRepository.save(new UserEventPermissionEntity(event2Id, "user1")).block();
+        permissionRepository.save(new UserEventPermissionEntity(event3Id, "user2")).block();
 
         webTestClient.get()
-                .uri("/api/permissions/user/user1/events")
+                .uri("/api/v1/permissions/user/user1/events")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -197,20 +197,20 @@ class PermissionControllerIT {
             new PermissionController.GrantPermissionRequest(eventId, "user1");
 
         webTestClient.post()
-                .uri("/api/permissions")
+                .uri("/api/v1/permissions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
                 .expectStatus().isCreated()
                 .expectBody(UserEventPermission.class)
                 .value(permission -> {
-                    assert permission.getEventId().equals(eventId);
-                    assert permission.getUserId().equals("user1");
+                    assert permission.eventId().equals(eventId);
+                    assert permission.userId().equals("user1");
                 });
 
         // Verify permission was saved
         webTestClient.get()
-                .uri("/api/permissions/user/user1")
+                .uri("/api/v1/permissions/user/user1")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -222,11 +222,11 @@ class PermissionControllerIT {
     @DisplayName("Should revoke permission successfully")
     void shouldRevokePermission() {
         Long eventId = createEvent("Test Event", "Description");
-        permissionRepository.save(new UserEventPermission(eventId, "user1")).block();
+        permissionRepository.save(new UserEventPermissionEntity(eventId, "user1")).block();
 
         // Verify permission exists
         webTestClient.get()
-                .uri("/api/permissions/user/user1")
+                .uri("/api/v1/permissions/user/user1")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -235,13 +235,13 @@ class PermissionControllerIT {
 
         // Revoke permission
         webTestClient.delete()
-                .uri("/api/permissions/event/" + eventId + "/user/user1")
+                .uri("/api/v1/permissions/event/" + eventId + "/user/user1")
                 .exchange()
                 .expectStatus().isNoContent();
 
         // Verify permission was removed
         webTestClient.get()
-                .uri("/api/permissions/user/user1")
+                .uri("/api/v1/permissions/user/user1")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -253,10 +253,10 @@ class PermissionControllerIT {
     @DisplayName("Should check permission correctly when permission exists")
     void shouldCheckPermissionWhenExists() {
         Long eventId = createEvent("Test Event", "Description");
-        permissionRepository.save(new UserEventPermission(eventId, "user1")).block();
+        permissionRepository.save(new UserEventPermissionEntity(eventId, "user1")).block();
 
         webTestClient.get()
-                .uri("/api/permissions/check?eventId=" + eventId + "&userId=user1")
+                .uri("/api/v1/permissions/check?eventId=" + eventId + "&userId=user1")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -274,7 +274,7 @@ class PermissionControllerIT {
         Long eventId = createEvent("Test Event", "Description");
 
         webTestClient.get()
-                .uri("/api/permissions/check?eventId=" + eventId + "&userId=user1")
+                .uri("/api/v1/permissions/check?eventId=" + eventId + "&userId=user1")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -290,7 +290,7 @@ class PermissionControllerIT {
     @DisplayName("Should return empty list for user with no permissions")
     void shouldReturnEmptyListForUserWithNoPermissions() {
         webTestClient.get()
-                .uri("/api/permissions/user/nonexistent")
+                .uri("/api/v1/permissions/user/nonexistent")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -304,7 +304,7 @@ class PermissionControllerIT {
         Long eventId = createEvent("Test Event", "Description");
 
         webTestClient.get()
-                .uri("/api/permissions/event/" + eventId)
+                .uri("/api/v1/permissions/event/" + eventId)
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -316,13 +316,13 @@ class PermissionControllerIT {
     @DisplayName("Should handle duplicate permission grant gracefully")
     void shouldHandleDuplicatePermissionGrant() {
         Long eventId = createEvent("Test Event", "Description");
-        permissionRepository.save(new UserEventPermission(eventId, "user1")).block();
+        permissionRepository.save(new UserEventPermissionEntity(eventId, "user1")).block();
 
         PermissionController.GrantPermissionRequest request = 
             new PermissionController.GrantPermissionRequest(eventId, "user1");
 
         webTestClient.post()
-                .uri("/api/permissions")
+                .uri("/api/v1/permissions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
@@ -343,7 +343,7 @@ class PermissionControllerIT {
             );
 
         webTestClient.post()
-                .uri("/api/permissions/bulk")
+                .uri("/api/v1/permissions/bulk")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
@@ -353,19 +353,19 @@ class PermissionControllerIT {
                 .value(permissions -> {
                     // Verify all three events have permissions for user1
                     java.util.Set<Long> eventIds = permissions.stream()
-                        .map(UserEventPermission::getEventId)
+                        .map(UserEventPermission::eventId)
                         .collect(java.util.stream.Collectors.toSet());
                     assert eventIds.contains(event1Id);
                     assert eventIds.contains(event2Id);
                     assert eventIds.contains(event3Id);
                     
                     // Verify all permissions are for user1
-                    assert permissions.stream().allMatch(p -> "user1".equals(p.getUserId()));
+                    assert permissions.stream().allMatch(p -> "user1".equals(p.userId()));
                 });
 
         // Verify permissions were saved by checking user's permissions
         webTestClient.get()
-                .uri("/api/permissions/user/user1")
+                .uri("/api/v1/permissions/user/user1")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -381,7 +381,7 @@ class PermissionControllerIT {
         Long event3Id = createEvent("Test Event 3", "Description 3");
         
         // Pre-create permission for event1 only
-        permissionRepository.save(new UserEventPermission(event1Id, "user1")).block();
+        permissionRepository.save(new UserEventPermissionEntity(event1Id, "user1")).block();
 
         PermissionController.GrantMultiplePermissionsRequest request = 
             new PermissionController.GrantMultiplePermissionsRequest(
@@ -391,7 +391,7 @@ class PermissionControllerIT {
 
         // The current implementation continues processing and only grants permissions that don't exist
         webTestClient.post()
-                .uri("/api/permissions/bulk")
+                .uri("/api/v1/permissions/bulk")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
@@ -400,19 +400,19 @@ class PermissionControllerIT {
                 .hasSize(2) // Should only create permissions for event2 and event3 (event1 already exists)
                 .value(permissions -> {
                     java.util.Set<Long> eventIds = permissions.stream()
-                        .map(UserEventPermission::getEventId)
+                        .map(UserEventPermission::eventId)
                         .collect(java.util.stream.Collectors.toSet());
                     assert eventIds.contains(event2Id);
                     assert eventIds.contains(event3Id);
                     assert !eventIds.contains(event1Id); // Should not include the duplicate
                     
                     // Verify all permissions are for user1
-                    assert permissions.stream().allMatch(p -> "user1".equals(p.getUserId()));
+                    assert permissions.stream().allMatch(p -> "user1".equals(p.userId()));
                 });
 
         // Verify total permissions count - should have all 3
         webTestClient.get()
-                .uri("/api/permissions/user/user1")
+                .uri("/api/v1/permissions/user/user1")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()

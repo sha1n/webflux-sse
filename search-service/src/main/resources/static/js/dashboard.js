@@ -5,7 +5,7 @@ function EventDashboard() {
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
 
     useEffect(() => {
-        const eventSource = new EventSource('/api/events/stream');
+        const eventSource = new EventSource('/api/v1/events');
         let currentBatch = [];
         let batchTimeout = null;
 

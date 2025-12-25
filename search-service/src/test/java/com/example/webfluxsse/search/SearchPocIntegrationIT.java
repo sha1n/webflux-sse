@@ -1,6 +1,8 @@
 package com.example.webfluxsse.search;
 
 import com.example.webfluxsse.search.api.model.Event;
+import com.example.webfluxsse.search.mapper.EventMapper;
+import com.example.webfluxsse.search.model.EventEntity;
 import com.example.webfluxsse.search.repository.elasticsearch.EventElasticsearchRepository;
 import com.example.webfluxsse.search.repository.r2dbc.EventRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -117,7 +119,7 @@ class SearchPocIntegrationIT {
             """;
 
         Event createdEvent = webTestClient.post()
-                .uri("/api/events")
+                .uri("/api/v1/events")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(requestBody)
                 .exchange()
@@ -126,13 +128,13 @@ class SearchPocIntegrationIT {
                 .returnResult()
                 .getResponseBody();
 
-        Long eventId = createdEvent.getId();
+        Long eventId = createdEvent.id();
 
         // Wait for Elasticsearch indexing
         Thread.sleep(2000);
 
         // Mock the authorization-service batch-check endpoint to return this event as authorized for user1
-        stubFor(post(urlEqualTo("/api/permissions/batch-check"))
+        stubFor(post(urlEqualTo("/api/v1/permissions/batch-check"))
                 .withRequestBody(matchingJsonPath("$.userId", equalTo("user1")))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -143,17 +145,18 @@ class SearchPocIntegrationIT {
                         )))));
 
         // Search for the event as user1
-        Flux<Event> responseBody = webTestClient.get()
-                .uri("/api/search?q=test")
-                .header("X-User-Id", "user1")
+        Flux<Event> responseBody = webTestClient.post()
+                .uri("/api/rpc/v1/search")
+                .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_NDJSON)
+                .bodyValue(Map.of("query", "test", "userId", "user1"))
                 .exchange()
                 .expectStatus().isOk()
                 .returnResult(Event.class)
                 .getResponseBody();
 
         StepVerifier.create(responseBody)
-                .expectNextMatches(event -> event.getTitle().equals("Test Event"))
+                .expectNextMatches(event -> event.title().equals("Test Event"))
                 .verifyComplete();
     }
 
@@ -161,66 +164,70 @@ class SearchPocIntegrationIT {
     @DisplayName("Should filter search results based on user permissions")
     void shouldFilterSearchResultsBasedOnUserPermissions() throws Exception {
         // Create two events
-        Event event1 = eventRepository.save(new Event(LocalDateTime.now(), "Public Event", "Available to user1")).block();
-        Event event2 = eventRepository.save(new Event(LocalDateTime.now(), "Private Event", "Available to user2")).block();
+        EventEntity entity1 = eventRepository.save(EventMapper.toEntity(new Event(LocalDateTime.now(), "Public Event", "Available to user1"))).block();
+        EventEntity entity2 = eventRepository.save(EventMapper.toEntity(new Event(LocalDateTime.now(), "Private Event", "Available to user2"))).block();
+        Event event1 = EventMapper.toDto(entity1);
+        Event event2 = EventMapper.toDto(entity2);
 
         // Index in Elasticsearch
-        elasticsearchRepository.save(event1).block();
-        elasticsearchRepository.save(event2).block();
+        elasticsearchRepository.save(entity1).block();
+        elasticsearchRepository.save(entity2).block();
 
         // Wait for indexing
         Thread.sleep(2000);
 
         // Mock the authorization-service batch-check endpoint for user1 (only has access to event1)
-        stubFor(post(urlEqualTo("/api/permissions/batch-check"))
+        stubFor(post(urlEqualTo("/api/v1/permissions/batch-check"))
                 .withRequestBody(matchingJsonPath("$.userId", equalTo("user1")))
-                .withRequestBody(matchingJsonPath("$.eventIds[?(@ == " + event1.getId() + ")]"))
+                .withRequestBody(matchingJsonPath("$.eventIds[?(@ == " + event1.id() + ")]"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody(objectMapper.writeValueAsString(Map.of(
                                 "userId", "user1",
-                                "authorizedEventIds", Set.of(event1.getId())
+                                "authorizedEventIds", Set.of(event1.id())
                         )))));
 
         // Mock the authorization-service batch-check endpoint for user2 (only has access to event2)
-        stubFor(post(urlEqualTo("/api/permissions/batch-check"))
+        stubFor(post(urlEqualTo("/api/v1/permissions/batch-check"))
                 .withRequestBody(matchingJsonPath("$.userId", equalTo("user2")))
-                .withRequestBody(matchingJsonPath("$.eventIds[?(@ == " + event2.getId() + ")]"))
+                .withRequestBody(matchingJsonPath("$.eventIds[?(@ == " + event2.id() + ")]"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody(objectMapper.writeValueAsString(Map.of(
                                 "userId", "user2",
-                                "authorizedEventIds", Set.of(event2.getId())
+                                "authorizedEventIds", Set.of(event2.id())
                         )))));
 
         // Search as user1 - should only see event1
-        Flux<Event> user1Response = webTestClient.get()
-                .uri("/api/search?q=Event")
-                .header("X-User-Id", "user1")
+        Flux<Event> user1Response = webTestClient.post()
+                .uri("/api/rpc/v1/search")
+                .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_NDJSON)
+                .bodyValue(Map.of("query", "Event", "userId", "user1"))
                 .exchange()
                 .expectStatus().isOk()
                 .returnResult(Event.class)
                 .getResponseBody();
 
         StepVerifier.create(user1Response)
-                .expectNextMatches(event -> event.getTitle().equals("Public Event"))
+                .expectNextMatches(event -> event.title().equals("Public Event"))
                 .verifyComplete();
 
         // Search as user2 - should only see event2
-        Flux<Event> user2Response = webTestClient.get()
-                .uri("/api/search?q=Event")
-                .header("X-User-Id", "user2")
+        Flux<Event> user2Response = webTestClient.post()
+                .uri("/api/rpc/v1/search")
+                .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_NDJSON)
+                .bodyValue(Map.of("query", "Event", "userId", "user2"))
                 .exchange()
                 .expectStatus().isOk()
                 .returnResult(Event.class)
                 .getResponseBody();
 
         StepVerifier.create(user2Response)
-                .expectNextMatches(event -> event.getTitle().equals("Private Event"))
+                .expectNextMatches(event -> event.title().equals("Private Event"))
                 .verifyComplete();
     }
 
@@ -228,14 +235,15 @@ class SearchPocIntegrationIT {
     @DisplayName("Should return empty results for user with no permissions")
     void shouldReturnEmptyResultsForUserWithNoPermissions() throws Exception {
         // Create an event
-        Event event = eventRepository.save(new Event(LocalDateTime.now(), "Test Event", "Test content")).block();
-        elasticsearchRepository.save(event).block();
+        EventEntity entity = eventRepository.save(EventMapper.toEntity(new Event(LocalDateTime.now(), "Test Event", "Test content"))).block();
+        elasticsearchRepository.save(entity).block();
+        Event event = EventMapper.toDto(entity);
 
         // Wait for indexing
         Thread.sleep(2000);
 
         // Mock the authorization-service batch-check endpoint to return empty authorized IDs for user3
-        stubFor(post(urlEqualTo("/api/permissions/batch-check"))
+        stubFor(post(urlEqualTo("/api/v1/permissions/batch-check"))
                 .withRequestBody(matchingJsonPath("$.userId", equalTo("user3")))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -246,10 +254,11 @@ class SearchPocIntegrationIT {
                         )))));
 
         // Search as user3 who has no permissions
-        Flux<Event> user3Response = webTestClient.get()
-                .uri("/api/search?q=Test")
-                .header("X-User-Id", "user3")
+        Flux<Event> user3Response = webTestClient.post()
+                .uri("/api/rpc/v1/search")
+                .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_NDJSON)
+                .bodyValue(Map.of("query", "Test", "userId", "user3"))
                 .exchange()
                 .expectStatus().isOk()
                 .returnResult(Event.class)

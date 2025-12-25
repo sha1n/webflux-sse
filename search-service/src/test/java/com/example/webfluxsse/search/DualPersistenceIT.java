@@ -1,6 +1,7 @@
 package com.example.webfluxsse.search;
 
 import com.example.webfluxsse.search.api.model.Event;
+import com.example.webfluxsse.search.mapper.EventMapper;
 import com.example.webfluxsse.search.repository.elasticsearch.EventElasticsearchRepository;
 import com.example.webfluxsse.search.repository.r2dbc.EventRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -86,7 +87,7 @@ class DualPersistenceIT {
             """;
 
         Long eventId = webTestClient.post()
-                .uri("/api/events")
+                .uri("/api/v1/events")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(requestBody)
                 .exchange()
@@ -94,22 +95,22 @@ class DualPersistenceIT {
                 .expectBody(Event.class)
                 .returnResult()
                 .getResponseBody()
-                .getId();
+                .id();
 
         // Verify event exists in PostgreSQL
-        Event postgresEvent = eventRepository.findById(eventId).block();
+        Event postgresEvent = eventRepository.findById(eventId).map(EventMapper::toDto).block();
         assert postgresEvent != null;
-        assert postgresEvent.getTitle().equals("Test Event");
-        assert postgresEvent.getDescription().equals("This is a test event for dual persistence");
+        assert postgresEvent.title().equals("Test Event");
+        assert postgresEvent.description().equals("This is a test event for dual persistence");
 
         // Wait for Elasticsearch indexing
         Thread.sleep(2000);
 
         // Verify event exists in Elasticsearch
-        Event elasticsearchEvent = elasticsearchRepository.findById(eventId).block();
+        Event elasticsearchEvent = elasticsearchRepository.findById(eventId).map(EventMapper::toDto).block();
         assert elasticsearchEvent != null;
-        assert elasticsearchEvent.getTitle().equals("Test Event");
-        assert elasticsearchEvent.getDescription().equals("This is a test event for dual persistence");
+        assert elasticsearchEvent.title().equals("Test Event");
+        assert elasticsearchEvent.description().equals("This is a test event for dual persistence");
     }
 
     @Test

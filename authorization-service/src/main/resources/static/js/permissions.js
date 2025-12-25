@@ -15,7 +15,7 @@ function PermissionManagement() {
     const fetchPermissions = async () => {
         setIsLoadingPermissions(true);
         try {
-            const response = await fetch('/api/permissions');
+            const response = await fetch('/api/v1/permissions');
             if (response.ok) {
                 const data = await response.json();
                 setPermissions(data);
@@ -90,7 +90,7 @@ function PermissionManagement() {
         try {
             if (isBulk) {
                 // Use bulk API for multiple IDs
-                const response = await fetch('/api/permissions/bulk', {
+                const response = await fetch('/api/v1/permissions/bulk', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -131,7 +131,7 @@ function PermissionManagement() {
                 }
             } else {
                 // Use single API for one ID
-                const response = await fetch('/api/permissions', {
+                const response = await fetch('/api/v1/permissions', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -197,7 +197,7 @@ function PermissionManagement() {
         }
 
         try {
-            const response = await fetch(`/api/permissions/event/${eventId}/user/${userId}`, {
+            const response = await fetch(`/api/v1/permissions/event/${eventId}/user/${userId}`, {
                 method: 'DELETE'
             });
 

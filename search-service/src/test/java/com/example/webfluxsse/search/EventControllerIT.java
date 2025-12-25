@@ -1,6 +1,7 @@
 package com.example.webfluxsse.search;
 
 import com.example.webfluxsse.search.api.model.Event;
+import com.example.webfluxsse.search.mapper.EventMapper;
 import com.example.webfluxsse.search.repository.r2dbc.EventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,12 +14,11 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.elasticsearch.ElasticsearchContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.time.Duration;
@@ -78,12 +78,12 @@ class EventControllerIT {
     void shouldReturnAllEventsViaRestApi() {
         Event event1 = new Event(LocalDateTime.now().minusMinutes(10), "Test Event 1", "Description 1");
         Event event2 = new Event(LocalDateTime.now().minusMinutes(5), "Test Event 2", "Description 2");
-        
-        eventRepository.save(event1).block();
-        eventRepository.save(event2).block();
+
+        eventRepository.save(EventMapper.toEntity(event1)).block();
+        eventRepository.save(EventMapper.toEntity(event2)).block();
 
         webTestClient.get()
-                .uri("/api/events")
+                .uri("/api/v1/events")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -93,8 +93,8 @@ class EventControllerIT {
                 .consumeWith(result -> {
                     var events = result.getResponseBody();
                     assert events != null;
-                    assert events.get(0).getTitle().equals("Test Event 2"); // Latest first
-                    assert events.get(1).getTitle().equals("Test Event 1");
+                    assert events.get(0).title().equals("Test Event 2"); // Latest first
+                    assert events.get(1).title().equals("Test Event 1");
                 });
     }
 
@@ -102,7 +102,7 @@ class EventControllerIT {
     @DisplayName("REST API should return empty list with 200 OK status when no events exist in database")
     void shouldReturnEmptyListWhenNoEvents() {
         webTestClient.get()
-                .uri("/api/events")
+                .uri("/api/v1/events")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -115,10 +115,10 @@ class EventControllerIT {
     @DisplayName("SSE endpoint should stream events with proper content-type and JSON payload when events exist")
     void shouldStreamEventsViaSse() {
         Event testEvent = new Event(LocalDateTime.now(), "SSE Test Event", "SSE Description");
-        eventRepository.save(testEvent).block();
+        eventRepository.save(EventMapper.toEntity(testEvent)).block();
 
         Flux<String> eventStream = webTestClient.get()
-                .uri("/api/events/stream")
+                .uri("/api/v1/events")
                 .accept(MediaType.TEXT_EVENT_STREAM)
                 .exchange()
                 .expectStatus().isOk()
@@ -141,11 +141,11 @@ class EventControllerIT {
         Event event1 = new Event(LocalDateTime.now().minusMinutes(1), "Stream Event 1", "Stream Description 1");
         Event event2 = new Event(LocalDateTime.now(), "Stream Event 2", "Stream Description 2");
         
-        eventRepository.save(event1).block();
-        eventRepository.save(event2).block();
+        eventRepository.save(EventMapper.toEntity(event1)).block();
+        eventRepository.save(EventMapper.toEntity(event2)).block();
 
         Flux<String> eventStream = webTestClient.get()
-                .uri("/api/events/stream")
+                .uri("/api/v1/events")
                 .accept(MediaType.TEXT_EVENT_STREAM)
                 .exchange()
                 .expectStatus().isOk()
@@ -165,10 +165,10 @@ class EventControllerIT {
     @DisplayName("SSE endpoint should detect and stream new events added to database during active connection")
     void shouldHandleEventUpdates() {
         Event initialEvent = new Event(LocalDateTime.now(), "Initial Event", "Initial Description");
-        eventRepository.save(initialEvent).block();
+        eventRepository.save(EventMapper.toEntity(initialEvent)).block();
 
         Flux<String> eventStream = webTestClient.get()
-                .uri("/api/events/stream")
+                .uri("/api/v1/events")
                 .accept(MediaType.TEXT_EVENT_STREAM)
                 .exchange()
                 .expectStatus().isOk()
@@ -178,7 +178,7 @@ class EventControllerIT {
                 .take(2)
                 .timeout(Duration.ofSeconds(10));
 
-        eventRepository.save(new Event(LocalDateTime.now(), "New Event", "New Description"))
+        eventRepository.save(EventMapper.toEntity(new Event(LocalDateTime.now(), "New Event", "New Description")))
                 .delaySubscription(Duration.ofSeconds(1))
                 .subscribe();
 
@@ -196,12 +196,12 @@ class EventControllerIT {
         Event newEvent = new Event(now.minusMinutes(30), "New Event", "New Description");
         Event recentEvent = new Event(now, "Recent Event", "Recent Description");
 
-        eventRepository.save(oldEvent).block();
-        eventRepository.save(newEvent).block();
-        eventRepository.save(recentEvent).block();
+        eventRepository.save(EventMapper.toEntity(oldEvent)).block();
+        eventRepository.save(EventMapper.toEntity(newEvent)).block();
+        eventRepository.save(EventMapper.toEntity(recentEvent)).block();
 
         webTestClient.get()
-                .uri("/api/events")
+                .uri("/api/v1/events")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -210,9 +210,9 @@ class EventControllerIT {
                 .consumeWith(result -> {
                     var events = result.getResponseBody();
                     assert events != null;
-                    assert events.get(0).getTitle().equals("Recent Event");
-                    assert events.get(1).getTitle().equals("New Event");
-                    assert events.get(2).getTitle().equals("Old Event");
+                    assert events.get(0).title().equals("Recent Event");
+                    assert events.get(1).title().equals("New Event");
+                    assert events.get(2).title().equals("Old Event");
                 });
     }
 
@@ -220,10 +220,10 @@ class EventControllerIT {
     @DisplayName("REST API should return complete Event objects with all required fields (id, timestamp, title, description)")
     void shouldValidateEventStructure() {
         Event testEvent = new Event(LocalDateTime.now(), "Validation Event", "Validation Description");
-        eventRepository.save(testEvent).block();
+        eventRepository.save(EventMapper.toEntity(testEvent)).block();
 
         webTestClient.get()
-                .uri("/api/events")
+                .uri("/api/v1/events")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -233,10 +233,10 @@ class EventControllerIT {
                     var events = result.getResponseBody();
                     assert events != null;
                     Event event = events.get(0);
-                    assert event.getId() != null;
-                    assert event.getTimestamp() != null;
-                    assert event.getTitle().equals("Validation Event");
-                    assert event.getDescription().equals("Validation Description");
+                    assert event.id() != null;
+                    assert event.timestamp() != null;
+                    assert event.title().equals("Validation Event");
+                    assert event.description().equals("Validation Description");
                 });
     }
 
@@ -251,7 +251,7 @@ class EventControllerIT {
             """;
 
         webTestClient.post()
-                .uri("/api/events")
+                .uri("/api/v1/events")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(requestBody)
                 .exchange()
@@ -261,10 +261,10 @@ class EventControllerIT {
                 .consumeWith(result -> {
                     Event createdEvent = result.getResponseBody();
                     assert createdEvent != null;
-                    assert createdEvent.getId() != null;
-                    assert createdEvent.getTimestamp() != null;
-                    assert createdEvent.getTitle().equals("Posted Event");
-                    assert createdEvent.getDescription().equals("Event created via POST API");
+                    assert createdEvent.id() != null;
+                    assert createdEvent.timestamp() != null;
+                    assert createdEvent.title().equals("Posted Event");
+                    assert createdEvent.description().equals("Event created via POST API");
                 });
     }
 
@@ -280,7 +280,7 @@ class EventControllerIT {
 
         // Create event via POST
         webTestClient.post()
-                .uri("/api/events")
+                .uri("/api/v1/events")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(requestBody)
                 .exchange()
@@ -288,7 +288,7 @@ class EventControllerIT {
 
         // Verify it's immediately available via GET
         webTestClient.get()
-                .uri("/api/events")
+                .uri("/api/v1/events")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -297,8 +297,8 @@ class EventControllerIT {
                 .consumeWith(result -> {
                     var events = result.getResponseBody();
                     assert events != null;
-                    assert events.get(0).getTitle().equals("Persistence Test Event");
-                    assert events.get(0).getDescription().equals("Testing immediate persistence");
+                    assert events.getFirst().title().equals("Persistence Test Event");
+                    assert events.getFirst().description().equals("Testing immediate persistence");
                 });
     }
 
@@ -314,7 +314,7 @@ class EventControllerIT {
 
         // Create event via POST
         webTestClient.post()
-                .uri("/api/events")
+                .uri("/api/v1/events")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(requestBody)
                 .exchange()
@@ -323,7 +323,7 @@ class EventControllerIT {
         // Verify the SSE endpoint is available and returns the expected content type
         // We won't consume the stream as it's infinite, but verify it starts correctly
         Flux<String> eventStream = webTestClient.get()
-                .uri("/api/events/stream")
+                .uri("/api/v1/events")
                 .accept(MediaType.TEXT_EVENT_STREAM)
                 .exchange()
                 .expectStatus().isOk()

@@ -1,6 +1,8 @@
 package com.example.webfluxsse.search;
 
 import com.example.webfluxsse.search.api.model.Event;
+import com.example.webfluxsse.search.mapper.EventMapper;
+import com.example.webfluxsse.search.model.EventEntity;
 import com.example.webfluxsse.search.repository.elasticsearch.EventElasticsearchRepository;
 import com.example.webfluxsse.search.repository.r2dbc.EventRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -101,27 +103,30 @@ class StreamingSearchIT {
         // 1. Create and Index Events (25 events to test batching > 20)
         int totalEvents = 25;
         List<Event> events = new ArrayList<>();
+        List<EventEntity> entities = new ArrayList<>();
         String userId = "user1";
 
         for (int i = 0; i < totalEvents; i++) {
             Event event = new Event(LocalDateTime.now(), "Stream Event " + i, "Content " + i);
-            events.add(eventRepository.save(event).block());
+            EventEntity savedEntity = eventRepository.save(EventMapper.toEntity(event)).block();
+            entities.add(savedEntity);
+            events.add(EventMapper.toDto(savedEntity));
         }
 
         // 2. Index in Elasticsearch
-        elasticsearchRepository.saveAll(events).collectList().block();
+        elasticsearchRepository.saveAll(entities).collectList().block();
 
         // 3. Determine which events user1 should have access to (odd numbered events = 12 events)
         Set<Long> authorizedEventIds = new HashSet<>();
         for (int i = 0; i < totalEvents; i++) {
             if (i % 2 != 0) {
-                authorizedEventIds.add(events.get(i).getId());
+                authorizedEventIds.add(events.get(i).id());
             }
         }
 
         // 4. Mock the authorization-service batch-check endpoint
         // The SearchService buffers in batches of 20, so we need to mock responses for each batch
-        List<Long> allEventIds = events.stream().map(Event::getId).collect(Collectors.toList());
+        List<Long> allEventIds = events.stream().map(Event::id).collect(Collectors.toList());
 
         // Mock for first batch (events 0-19, which is 20 events)
         List<Long> batch1Ids = allEventIds.subList(0, Math.min(20, allEventIds.size()));
@@ -129,7 +134,7 @@ class StreamingSearchIT {
                 .filter(authorizedEventIds::contains)
                 .collect(Collectors.toSet());
 
-        stubFor(post(urlEqualTo("/api/permissions/batch-check"))
+        stubFor(post(urlEqualTo("/api/v1/permissions/batch-check"))
                 .withRequestBody(matchingJsonPath("$.userId", equalTo(userId)))
                 .withRequestBody(matchingJsonPath("$.eventIds[0]", equalTo(String.valueOf(batch1Ids.get(0)))))
                 .willReturn(aResponse()
@@ -147,7 +152,7 @@ class StreamingSearchIT {
                     .filter(authorizedEventIds::contains)
                     .collect(Collectors.toSet());
 
-            stubFor(post(urlEqualTo("/api/permissions/batch-check"))
+            stubFor(post(urlEqualTo("/api/v1/permissions/batch-check"))
                     .withRequestBody(matchingJsonPath("$.userId", equalTo(userId)))
                     .withRequestBody(matchingJsonPath("$.eventIds[0]", equalTo(String.valueOf(batch2Ids.get(0)))))
                     .willReturn(aResponse()
@@ -163,10 +168,11 @@ class StreamingSearchIT {
         Thread.sleep(2000);
 
         // 5. Perform Search
-        Flux<Event> responseBody = webTestClient.get()
-                .uri("/api/search?q=Stream")
-                .header("X-User-Id", userId)
+        Flux<Event> responseBody = webTestClient.post()
+                .uri("/api/rpc/v1/search")
+                .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_NDJSON)
+                .bodyValue(Map.of("query", "Stream", "userId", userId))
                 .exchange()
                 .expectStatus().isOk()
                 .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_NDJSON)

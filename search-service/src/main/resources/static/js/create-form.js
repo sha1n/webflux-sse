@@ -20,7 +20,7 @@ function CreateEventForm() {
         setMessage('');
 
         try {
-            const response = await fetch('/api/events', {
+            const response = await fetch('/api/v1/events', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -1,6 +1,8 @@
 package com.example.webfluxsse.search.service;
 
 import com.example.webfluxsse.search.api.model.Event;
+import com.example.webfluxsse.search.mapper.EventMapper;
+import com.example.webfluxsse.search.model.EventEntity;
 import com.example.webfluxsse.search.repository.elasticsearch.EventElasticsearchRepository;
 import com.example.webfluxsse.search.repository.r2dbc.EventRepository;
 import org.slf4j.Logger;
@@ -30,26 +32,31 @@ public class EventsService {
     }
 
     public Flux<Event> getAllEvents() {
-        return eventRepository.findAllOrderByTimestampDesc();
+        return eventRepository.findAllOrderByTimestampDesc()
+                .map(EventMapper::toDto);
     }
 
     public Mono<Event> saveEvent(Event event) {
+        EventEntity entity = EventMapper.toEntity(event);
+
         if (elasticsearchRepository != null) {
-            log.info("Saving event with dual persistence: title='{}'", event.getTitle());
-            return eventRepository.save(event)
-                    .doOnSuccess(savedEvent -> log.info("Event saved to PostgreSQL with id={}", savedEvent.getId()))
-                    .flatMap(savedEvent ->
-                        elasticsearchRepository.save(savedEvent)
-                                .doOnSuccess(indexedEvent -> log.info("Event indexed in Elasticsearch with id={}", indexedEvent.getId()))
+            log.info("Saving event with dual persistence: title='{}'", event.title());
+            return eventRepository.save(entity)
+                    .doOnSuccess(savedEntity -> log.info("Event saved to PostgreSQL with id={}", savedEntity.getId()))
+                    .flatMap(savedEntity ->
+                        elasticsearchRepository.save(savedEntity)
+                                .doOnSuccess(indexedEntity -> log.info("Event indexed in Elasticsearch with id={}", indexedEntity.getId()))
                                 .onErrorResume(error -> {
                                     log.error("Failed to index event in Elasticsearch: {}", error.getMessage());
-                                    return Mono.just(savedEvent);
+                                    return Mono.just(savedEntity);
                                 })
-                    );
+                    )
+                    .map(EventMapper::toDto);
         } else {
-            log.info("Saving event with single persistence: title='{}'", event.getTitle());
-            return eventRepository.save(event)
-                    .doOnSuccess(savedEvent -> log.info("Event saved to PostgreSQL with id={}", savedEvent.getId()));
+            log.info("Saving event with single persistence: title='{}'", event.title());
+            return eventRepository.save(entity)
+                    .doOnSuccess(savedEntity -> log.info("Event saved to PostgreSQL with id={}", savedEntity.getId()))
+                    .map(EventMapper::toDto);
         }
     }
 }

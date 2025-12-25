@@ -3,6 +3,8 @@ package com.example.webfluxsse.search.service;
 import com.example.webfluxsse.authorization.api.dto.BatchPermissionCheckResponse;
 import com.example.webfluxsse.search.api.model.Event;
 import com.example.webfluxsse.search.client.AuthorizationServiceClient;
+import com.example.webfluxsse.search.mapper.EventMapper;
+import com.example.webfluxsse.search.model.EventEntity;
 import com.example.webfluxsse.search.repository.elasticsearch.EventElasticsearchRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +41,7 @@ public class SearchService {
                 .buffer(20)
                 .flatMap(batch -> checkPermissionsBatch(batch, userId))
                 .flatMapIterable(java.util.function.Function.identity())
+                .map(EventMapper::toDto)
                 .doOnComplete(() -> log.debug("Search completed for query='{}', userId='{}'", query, userId))
                 .onErrorResume(error -> {
                     log.error("Elasticsearch search failed for query='{}', userId='{}': {}",
@@ -47,13 +50,13 @@ public class SearchService {
                 });
     }
 
-    private Mono<java.util.List<Event>> checkPermissionsBatch(java.util.List<Event> events, String userId) {
-        if (events.isEmpty()) {
+    private Mono<java.util.List<EventEntity>> checkPermissionsBatch(java.util.List<EventEntity> entities, String userId) {
+        if (entities.isEmpty()) {
             return Mono.just(java.util.Collections.emptyList());
         }
 
-        java.util.List<Long> eventIds = events.stream()
-                .map(Event::getId)
+        java.util.List<Long> eventIds = entities.stream()
+                .map(EventEntity::getId)
                 .collect(java.util.stream.Collectors.toList());
 
         log.debug("Checking permissions for {} events, userId='{}'", eventIds.size(), userId);
@@ -61,11 +64,11 @@ public class SearchService {
         // Call authorization-service via REST API
         return authorizationClient.checkBatchPermissions(eventIds, userId)
                 .map(BatchPermissionCheckResponse::authorizedEventIds)
-                .map(authorizedIds -> events.stream()
-                        .filter(event -> authorizedIds.contains(event.getId()))
+                .map(authorizedIds -> entities.stream()
+                        .filter(entity -> authorizedIds.contains(entity.getId()))
                         .collect(java.util.stream.Collectors.toList()))
-                .doOnNext(filteredEvents -> log.debug("Filtered to {} authorized events for userId='{}'",
-                        filteredEvents.size(), userId));
+                .doOnNext(filteredEntities -> log.debug("Filtered to {} authorized events for userId='{}'",
+                        filteredEntities.size(), userId));
     }
 
     public Flux<Event> getEventsForUser(String userId) {
@@ -74,7 +77,8 @@ public class SearchService {
         // Call authorization-service to get event IDs user has access to
         return authorizationClient.getEventIdsForUser(userId)
                 .flatMap(eventId -> elasticsearchRepository.findById(eventId)
-                        .doOnNext(event -> log.trace("Found event: id={}", event.getId())))
+                        .doOnNext(entity -> log.trace("Found event: id={}", entity.getId())))
+                .map(EventMapper::toDto)
                 .doOnComplete(() -> log.debug("Retrieved all events for userId='{}'", userId))
                 .onErrorResume(error -> {
                     log.error("Failed to get events for userId='{}': {}", userId, error.getMessage());

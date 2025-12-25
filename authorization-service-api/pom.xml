@@ -15,16 +15,10 @@
     <description>Authorization Service API models, DTOs and contracts</description>
 
     <dependencies>
-        <!-- Spring WebFlux for Jackson serialization -->
+        <!-- Jackson for JSON serialization -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-webflux</artifactId>
-        </dependency>
-
-        <!-- Spring Data R2DBC for @Table, @Id annotations -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-r2dbc</artifactId>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
     </dependencies>
 </project>

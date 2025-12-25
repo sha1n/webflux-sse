@@ -35,7 +35,7 @@ public class AuthorizationServiceClient {
         BatchPermissionCheckRequest request = new BatchPermissionCheckRequest(eventIds, userId);
 
         return webClient.post()
-                .uri("/api/permissions/batch-check")
+                .uri("/api/v1/permissions/batch-check")
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(BatchPermissionCheckResponse.class)
@@ -53,7 +53,7 @@ public class AuthorizationServiceClient {
         log.debug("Getting event IDs for userId: {}", userId);
 
         return webClient.get()
-                .uri("/api/permissions/user/{userId}/events", userId)
+                .uri("/api/v1/permissions/user/{userId}/events", userId)
                 .retrieve()
                 .bodyToFlux(Long.class)
                 .timeout(timeout)
