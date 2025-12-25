@@ -213,12 +213,23 @@ function PermissionManagement() {
     };
 
     return (
-        <div className="container">
-            <div className="header">
-                <h1>Permission Management</h1>
+        <>
+            <div className="api-docs-ribbon">
+                <a href="/swagger-ui.html" target="_blank">
+                    API Docs
+                </a>
             </div>
+            <div className="container">
+                <div className="header">
+                    <h1>Permission Management</h1>
+                </div>
 
-            <div className="permissions-content">
+                <div className="nav">
+                    <a href="http://localhost:8081/" target="_blank">← Back to Events Dashboard ↗</a>
+                    <span className="current">Manage Permissions</span>
+                </div>
+
+                <div className="permissions-content">
                 <div className="toolbar">
                     <h2>User Permissions ({Object.keys(groupedPermissions).length} users)</h2>
                     <button
@@ -375,6 +386,7 @@ function PermissionManagement() {
                 </div>
             )}
         </div>
+        </>
     );
 }
 

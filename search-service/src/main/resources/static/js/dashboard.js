@@ -55,22 +55,28 @@ function EventDashboard() {
 
 
     return (
-        <div className="container">
-            <div className="header">
-                <h1>Event Stream Dashboard</h1>
+        <>
+            <div className="api-docs-ribbon">
+                <a href="/swagger-ui.html" target="_blank">
+                    API Docs
+                </a>
             </div>
-            <div className="status">
-                Connection Status: 
-                <span className={connectionStatus === 'connected' ? 'connected' : 'disconnected'}>
-                    {connectionStatus === 'connected' ? ' ● Connected' : ' ● Disconnected'}
-                </span>
-                {events.length > 0 && <span> | Events: {events.length}</span>}
-            </div>
-            <div className="nav">
-                <a href="/create.html">+ Create New Event</a>
-                <a href="/search.html">Search Events</a>
-                <a href="http://localhost:8082/permissions.html" target="_blank">Manage Permissions ↗</a>
-            </div>
+            <div className="container">
+                <div className="header">
+                    <h1>Event Stream Dashboard</h1>
+                </div>
+                <div className="status">
+                    Connection Status:
+                    <span className={connectionStatus === 'connected' ? 'connected' : 'disconnected'}>
+                        {connectionStatus === 'connected' ? ' ● Connected' : ' ● Disconnected'}
+                    </span>
+                    {events.length > 0 && <span> | Events: {events.length}</span>}
+                </div>
+                <div className="nav">
+                    <a href="/create.html">+ Create New Event</a>
+                    <a href="/search.html">Search Events</a>
+                    <a href="http://localhost:8082/permissions.html" target="_blank">Manage Permissions ↗</a>
+                </div>
             <div className="table-container">
                 {events.length === 0 ? (
                     <div className="empty-state">
@@ -100,6 +106,7 @@ function EventDashboard() {
                 )}
             </div>
         </div>
+        </>
     );
 }
 

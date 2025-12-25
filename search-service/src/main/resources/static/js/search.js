@@ -91,14 +91,20 @@ function SearchApp() {
 
 
     return (
-        <div className="container">
-            <div className="header">
-                <h1>Event Search</h1>
+        <>
+            <div className="api-docs-ribbon">
+                <a href="/swagger-ui.html" target="_blank">
+                    API Docs
+                </a>
             </div>
-            <div className="nav">
-                <a href="/">← Back to Events Dashboard</a>
-                <span className="current">Search Events</span>
-            </div>
+            <div className="container">
+                <div className="header">
+                    <h1>Event Search</h1>
+                </div>
+                <div className="nav">
+                    <a href="/">← Back to Events Dashboard</a>
+                    <span className="current">Search Events</span>
+                </div>
             <div className="search-container">
                 <form onSubmit={handleSearch} className="search-form">
                     <div className="search-row">
@@ -184,6 +190,7 @@ function SearchApp() {
                 </div>
             </div>
         </div>
+        </>
     );
 }
 

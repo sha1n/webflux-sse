@@ -61,14 +61,20 @@ function CreateEventForm() {
     };
 
     return (
-        <div className="container">
-            <div className="header">
-                <h1>Create New Event</h1>
+        <>
+            <div className="api-docs-ribbon">
+                <a href="/swagger-ui.html" target="_blank">
+                    API Docs
+                </a>
             </div>
-            <div className="nav">
-                <a href="/">← Back to Dashboard</a>
-                <span className="current">Create Event</span>
-            </div>
+            <div className="container">
+                <div className="header">
+                    <h1>Create New Event</h1>
+                </div>
+                <div className="nav">
+                    <a href="/">← Back to Dashboard</a>
+                    <span className="current">Create Event</span>
+                </div>
             <div className="form-container">
                 <p className="form-description">
                     Create a new event that will be immediately added to the database and appear in the real-time event stream. 
@@ -121,6 +127,7 @@ function CreateEventForm() {
                 </form>
             </div>
         </div>
+        </>
     );
 }
 
