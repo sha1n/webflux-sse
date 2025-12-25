@@ -1,11 +1,9 @@
 /* Search page specific styles */
 
-.container {
-    max-width: 1000px;
-}
-
 .search-container {
     padding: 30px;
+    max-width: 50%;
+    margin-left: 0;
 }
 
 .search-form {
@@ -65,11 +63,14 @@
     font-size: 16px;
     cursor: pointer;
     font-weight: 500;
-    transition: background-color 0.15s ease-in-out;
+    transition: all 0.15s ease-in-out;
 }
 
 .btn-search:hover:not(:disabled) {
-    background: #0056b3;
+    background: #0069d9;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
 }
 
 .btn-search:disabled {
@@ -86,11 +87,14 @@
     font-size: 16px;
     cursor: pointer;
     font-weight: 500;
-    transition: background-color 0.15s ease-in-out;
+    transition: all 0.15s ease-in-out;
 }
 
 .btn-clear:hover {
-    background: #545b62;
+    background: #5a6268;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(108, 117, 125, 0.3);
 }
 
 .results-container {
@@ -171,19 +175,4 @@
     text-align: center;
     padding: 40px;
     color: #6c757d;
-}
-
-.loading {
-    text-align: center;
-    padding: 20px;
-    color: #007bff;
-}
-
-.error-message {
-    background: #f8d7da;
-    color: #721c24;
-    padding: 12px 16px;
-    border-radius: 6px;
-    margin-bottom: 20px;
-    border: 1px solid #f5c6cb;
 }

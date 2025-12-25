@@ -1,11 +1,7 @@
 /* Dashboard-specific styles */
 
-.container {
-    max-width: 1200px;
-}
-
 .status {
-    padding: 10px 20px;
+    padding: 15px 20px;
     background: #e9ecef;
     border-bottom: 1px solid #dee2e6;
     font-size: 14px;
@@ -25,6 +21,7 @@
 
 .table-container {
     overflow-x: auto;
+    padding: 20px;
 }
 
 table {
@@ -92,32 +89,3 @@ tr:hover {
     text-decoration: underline;
 }
 
-/* Dashboard-specific navigation styling */
-.nav {
-    display: flex;
-    gap: 12px;
-}
-
-.nav a {
-    padding: 8px 16px;
-    color: white;
-    border-radius: 4px;
-    transition: background-color 0.15s ease-in-out;
-    text-decoration: none;
-}
-
-.nav a:first-child {
-    background: #007bff;
-}
-
-.nav a:first-child:hover {
-    background: #0056b3;
-}
-
-.nav a:not(:first-child) {
-    background: #6c757d;
-}
-
-.nav a:not(:first-child):hover {
-    background: #545b62;
-}

@@ -5,17 +5,20 @@ body {
         'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
         sans-serif;
     margin: 0;
-    padding: 20px;
+    padding: 0;
     background: linear-gradient(135deg, #f0f7ff 0%, #e6f3ff 100%);
 }
 
 .container {
-    margin: 0 auto;
+    max-width: 100%;
+    width: 100%;
+    margin: 0;
     background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 123, 255, 0.15);
+    border-radius: 0;
+    box-shadow: none;
     overflow: hidden;
-    border: 1px solid #cce5ff;
+    border: none;
+    min-height: 100vh;
 }
 
 .header {
@@ -25,31 +28,190 @@ body {
     text-align: center;
 }
 
-.header h1::before {
-    content: "🔒 ";
-}
-
 .nav {
     background: #e7f3ff;
-    padding: 15px 20px;
+    padding: 20px;
     border-bottom: 1px solid #cce5ff;
+    display: flex;
+    gap: 12px;
+    align-items: center;
 }
 
-.nav a {
-    color: #007bff;
+.nav a,
+.nav button,
+.nav .current {
+    padding: 12px 20px;
+    color: white;
+    background: #6c757d;
+    border-radius: 4px;
     text-decoration: none;
-    margin-right: 20px;
     font-weight: 500;
+    transition: all 0.15s ease-in-out;
+    border: none;
+    cursor: pointer;
+    font-size: 15px;
+    display: inline-block;
 }
 
-.nav a:hover {
-    text-decoration: underline;
-    color: #0056b3;
+.nav a:hover,
+.nav button:hover {
+    background: #5a6268;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(108, 117, 125, 0.3);
+}
+
+.nav a.primary,
+.nav button.primary {
+    background: #007bff;
+}
+
+.nav a.primary:hover,
+.nav button.primary:hover {
+    background: #0069d9;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
 }
 
 .nav .current {
+    background: #28a745;
+    color: white;
+    cursor: default;
+}
+
+/* Shared Button Styles */
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+    transition: all 0.15s ease-in-out;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #0069d9;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #5a6268;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(108, 117, 125, 0.3);
+}
+
+.btn:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Shared Message Styles */
+.success-message {
+    background: #d4edda;
+    color: #155724;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    border: 1px solid #c3e6cb;
+}
+
+.error-message {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    border: 1px solid #f5c6cb;
+}
+
+.info-message {
+    background: #d1ecf1;
+    color: #0c5460;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    border: 1px solid #bee5eb;
+}
+
+.warning-message {
+    background: #fff3cd;
+    color: #856404;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    border: 1px solid #ffeeba;
+}
+
+/* Shared Loading State */
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #007bff;
+    font-size: 16px;
+}
+
+/* Shared Empty State */
+.empty-state {
+    text-align: center;
+    padding: 40px;
     color: #6c757d;
+}
+
+/* Shared Form Group Basics */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
     font-weight: 600;
+    color: #495057;
+    font-size: 14px;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e9ecef;
+    border-radius: 6px;
+    font-size: 16px;
+    transition: border-color 0.15s ease-in-out;
+    box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.form-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
 }
 
 /* Corner Ribbon for API Docs */

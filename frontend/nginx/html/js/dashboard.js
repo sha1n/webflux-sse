@@ -8,25 +8,36 @@ function EventDashboard() {
         const eventSource = new EventSource('/api/v1/events');
         let currentBatch = [];
         let batchTimeout = null;
-        let canShowDisconnected = false;
+        let connectionTimeout = null;
 
-        // After 3 seconds, allow showing disconnected status
-        const allowDisconnectTimeout = setTimeout(() => {
-            canShowDisconnected = true;
-        }, 3000);
+        // Set a timeout to detect if we don't receive any data within 5 seconds
+        connectionTimeout = setTimeout(() => {
+            if (eventSource.readyState !== EventSource.OPEN) {
+                console.log('❌ Connection timeout - no response from server');
+                setConnectionStatus('disconnected');
+            }
+        }, 5000);
 
         eventSource.onopen = () => {
             console.log('✅ SSE connection opened');
-            setConnectionStatus('connected');
+            // Don't set to connected yet, wait for actual data or heartbeat
         };
 
         // Handle heartbeat events (sent when there are no data events)
         eventSource.addEventListener('heartbeat', () => {
             console.log('💓 Received heartbeat');
+            if (connectionTimeout) {
+                clearTimeout(connectionTimeout);
+                connectionTimeout = null;
+            }
             setConnectionStatus('connected');
         });
 
         eventSource.onmessage = (event) => {
+            if (connectionTimeout) {
+                clearTimeout(connectionTimeout);
+                connectionTimeout = null;
+            }
             setConnectionStatus('connected');
 
             try {
@@ -52,17 +63,25 @@ function EventDashboard() {
         eventSource.onerror = (error) => {
             console.error('⚠️ SSE error:', error, 'readyState:', eventSource.readyState);
 
-            // Only show disconnected if we've waited long enough AND connection is closed
-            if (canShowDisconnected && eventSource.readyState === EventSource.CLOSED) {
-                console.log('❌ Setting status to disconnected');
+            if (connectionTimeout) {
+                clearTimeout(connectionTimeout);
+                connectionTimeout = null;
+            }
+
+            // Show disconnected if connection is closed or connecting failed
+            if (eventSource.readyState === EventSource.CLOSED) {
+                console.log('❌ Connection closed - setting status to disconnected');
                 setConnectionStatus('disconnected');
-            } else {
-                console.log('⏳ Still connecting, not showing disconnected yet');
+            } else if (eventSource.readyState === EventSource.CONNECTING) {
+                console.log('⏳ Connection failed, retrying...');
+                setConnectionStatus('connecting');
             }
         };
 
         return () => {
-            clearTimeout(allowDisconnectTimeout);
+            if (connectionTimeout) {
+                clearTimeout(connectionTimeout);
+            }
             if (batchTimeout) {
                 clearTimeout(batchTimeout);
             }
@@ -96,9 +115,10 @@ function EventDashboard() {
                     {events.length > 0 && <span> | Events: {events.length}</span>}
                 </div>
                 <div className="nav">
-                    <a href="/create.html">+ Create New Event</a>
-                    <a href="/search.html">Search Events</a>
-                    <a href="/permissions.html">Manage Permissions</a>
+                    <span className="current">Dashboard</span>
+                    <a href="/create.html" className="primary">+ Create Event</a>
+                    <a href="/search.html">Search</a>
+                    <a href="/permissions.html">Permissions</a>
                 </div>
             <div className="table-container">
                 {connectionStatus === 'disconnected' ? (

@@ -225,8 +225,10 @@ function PermissionManagement() {
                 </div>
 
                 <div className="nav">
-                    <a href="/">← Back to Events Dashboard</a>
-                    <span className="current">Manage Permissions</span>
+                    <a href="/">Dashboard</a>
+                    <a href="/create.html" className="primary">+ Create Event</a>
+                    <a href="/search.html">Search</a>
+                    <span className="current">Permissions</span>
                 </div>
 
                 <div className="permissions-content">

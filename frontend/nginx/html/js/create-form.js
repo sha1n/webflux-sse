@@ -72,8 +72,10 @@ function CreateEventForm() {
                     <h1>Create New Event</h1>
                 </div>
                 <div className="nav">
-                    <a href="/">← Back to Dashboard</a>
+                    <a href="/">Dashboard</a>
                     <span className="current">Create Event</span>
+                    <a href="/search.html">Search</a>
+                    <a href="/permissions.html">Permissions</a>
                 </div>
             <div className="form-container">
                 <p className="form-description">

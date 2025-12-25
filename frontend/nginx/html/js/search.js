@@ -102,8 +102,10 @@ function SearchApp() {
                     <h1>Event Search</h1>
                 </div>
                 <div className="nav">
-                    <a href="/">← Back to Events Dashboard</a>
-                    <span className="current">Search Events</span>
+                    <a href="/">Dashboard</a>
+                    <a href="/create.html" className="primary">+ Create Event</a>
+                    <span className="current">Search</span>
+                    <a href="/permissions.html">Permissions</a>
                 </div>
             <div className="search-container">
                 <form onSubmit={handleSearch} className="search-form">
