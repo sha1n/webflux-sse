@@ -18,24 +18,28 @@ else
     echo "Detected Linux host IP: $HOST_IP"
 fi
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NGINX_DIR="$SCRIPT_DIR/nginx"
+
 # Create nginx.conf from template if template exists
-if [ -f "nginx/nginx.conf.template" ]; then
+if [ -f "$NGINX_DIR/nginx.conf.template" ]; then
     echo "Using template to generate nginx.conf..."
-    sed "s/DOCKER_HOST_IP/$HOST_IP/g" nginx/nginx.conf.template > nginx/nginx.conf
+    sed "s/DOCKER_HOST_IP/$HOST_IP/g" "$NGINX_DIR/nginx.conf.template" > "$NGINX_DIR/nginx.conf"
     echo "nginx.conf generated from template"
 else
     # Update existing nginx.conf
     echo "Updating existing nginx.conf..."
     # Backup first
-    cp nginx/nginx.conf nginx/nginx.conf.bak
+    cp "$NGINX_DIR/nginx.conf" "$NGINX_DIR/nginx.conf.bak"
 
     # Replace any existing IP addresses in the upstream blocks
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/server [0-9.]*:8081;/server $HOST_IP:8081;/" nginx/nginx.conf
-        sed -i '' "s/server [0-9.]*:8082;/server $HOST_IP:8082;/" nginx/nginx.conf
+        sed -i '' "s/server [0-9.]*:8081;/server $HOST_IP:8081;/" "$NGINX_DIR/nginx.conf"
+        sed -i '' "s/server [0-9.]*:8082;/server $HOST_IP:8082;/" "$NGINX_DIR/nginx.conf"
     else
-        sed -i "s/server [0-9.]*:8081;/server $HOST_IP:8081;/" nginx/nginx.conf
-        sed -i "s/server [0-9.]*:8082;/server $HOST_IP:8082;/" nginx/nginx.conf
+        sed -i "s/server [0-9.]*:8081;/server $HOST_IP:8081;/" "$NGINX_DIR/nginx.conf"
+        sed -i "s/server [0-9.]*:8082;/server $HOST_IP:8082;/" "$NGINX_DIR/nginx.conf"
     fi
     echo "nginx.conf updated"
 fi

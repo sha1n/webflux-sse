@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -25,19 +28,19 @@ start_database() {
     echo -e "${BLUE}📦 Starting Docker containers (PostgreSQL, Elasticsearch, Nginx)...${NC}"
 
     # Stop existing containers if they exist
-    docker-compose down > /dev/null 2>&1
+    docker-compose -f "$SCRIPT_DIR/docker-compose.yml" down > /dev/null 2>&1
 
     # Start the database
-    if docker-compose up -d; then
+    if docker-compose -f "$SCRIPT_DIR/docker-compose.yml" up -d; then
         echo -e "${GREEN}✅ Docker containers started${NC}"
-        
+
         # Wait for database to be ready
         echo -e "${YELLOW}⏳ Waiting for database to be ready...${NC}"
-        
+
         # Wait up to 60 seconds for database to be ready
         timeout=60
         while [ $timeout -gt 0 ]; do
-            if docker-compose exec -T postgres pg_isready -U postgres -d eventdb > /dev/null 2>&1; then
+            if docker-compose -f "$SCRIPT_DIR/docker-compose.yml" exec -T postgres pg_isready -U postgres -d eventdb > /dev/null 2>&1; then
                 echo -e "${GREEN}✅ Database is ready!${NC}"
                 break
             fi
@@ -45,10 +48,10 @@ start_database() {
             sleep 2
             timeout=$((timeout-2))
         done
-        
+
         if [ $timeout -le 0 ]; then
             echo -e "${RED}❌ Database failed to start within 60 seconds${NC}"
-            docker-compose logs postgres
+            docker-compose -f "$SCRIPT_DIR/docker-compose.yml" logs postgres
             exit 1
         fi
     else
@@ -67,22 +70,22 @@ start_applications() {
         exit 1
     fi
 
-    # Start authorization-service on port 8082
-    echo -e "${YELLOW}⏳ Starting authorization-service on port 8082...${NC}"
-    mvn -pl authorization-service spring-boot:run > /dev/null 2>&1 &
+    # Start authorization-server on port 8082
+    echo -e "${YELLOW}⏳ Starting authorization-server on port 8082...${NC}"
+    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/authorization/authorization-server spring-boot:run > /dev/null 2>&1 &
     AUTH_PID=$!
 
-    # Start search-service on port 8081
-    echo -e "${YELLOW}⏳ Starting search-service on port 8081...${NC}"
-    mvn -pl search-service spring-boot:run > /dev/null 2>&1 &
+    # Start search-server on port 8081
+    echo -e "${YELLOW}⏳ Starting search-server on port 8081...${NC}"
+    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server spring-boot:run > /dev/null 2>&1 &
     SEARCH_PID=$!
 
-    # Wait for authorization-service to start
-    echo -e "${YELLOW}⏳ Waiting for authorization-service to start...${NC}"
+    # Wait for authorization-server to start
+    echo -e "${YELLOW}⏳ Waiting for authorization-server to start...${NC}"
     timeout=120
     while [ $timeout -gt 0 ]; do
         if curl -s http://localhost:8082/api/v1/permissions > /dev/null 2>&1; then
-            echo -e "${GREEN}✅ Authorization-service is running on port 8082!${NC}"
+            echo -e "${GREEN}✅ Authorization-server is running on port 8082!${NC}"
             break
         fi
         echo -n "."
@@ -91,15 +94,15 @@ start_applications() {
     done
 
     if [ $timeout -le 0 ]; then
-        echo -e "${YELLOW}⚠️ Authorization-service may still be starting. Check http://localhost:8082${NC}"
+        echo -e "${YELLOW}⚠️ Authorization-server may still be starting. Check http://localhost:8082${NC}"
     fi
 
-    # Wait for search-service to start
-    echo -e "${YELLOW}⏳ Waiting for search-service to start...${NC}"
+    # Wait for search-server to start
+    echo -e "${YELLOW}⏳ Waiting for search-server to start...${NC}"
     timeout=120
     while [ $timeout -gt 0 ]; do
         if curl -s http://localhost:8081/api/v1/events > /dev/null 2>&1; then
-            echo -e "${GREEN}✅ Search-service is running on port 8081!${NC}"
+            echo -e "${GREEN}✅ Search-server is running on port 8081!${NC}"
             break
         fi
         echo -n "."
@@ -108,7 +111,7 @@ start_applications() {
     done
 
     if [ $timeout -le 0 ]; then
-        echo -e "${YELLOW}⚠️ Search-service may still be starting. Check http://localhost:8081${NC}"
+        echo -e "${YELLOW}⚠️ Search-server may still be starting. Check http://localhost:8081${NC}"
     fi
 }
 
@@ -155,9 +158,9 @@ cleanup() {
     if [ ! -z "$SEARCH_PID" ]; then
         kill $SEARCH_PID > /dev/null 2>&1
     fi
-    pkill -f "authorization-service.*spring-boot:run" > /dev/null 2>&1
-    pkill -f "search-service.*spring-boot:run" > /dev/null 2>&1
-    docker-compose down > /dev/null 2>&1
+    pkill -f "authorization-server.*spring-boot:run" > /dev/null 2>&1
+    pkill -f "search-server.*spring-boot:run" > /dev/null 2>&1
+    docker-compose -f "$SCRIPT_DIR/docker-compose.yml" down > /dev/null 2>&1
     echo -e "${GREEN}✅ Cleanup complete${NC}"
     exit 0
 }
@@ -167,7 +170,7 @@ trap cleanup INT TERM
 
 # Main execution
 check_docker
-./configure-nginx-host.sh
+"$SCRIPT_DIR/../frontend/configure-nginx-host.sh"
 start_database
 start_applications
 show_info

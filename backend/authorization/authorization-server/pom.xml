@@ -10,16 +10,12 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>search-service</artifactId>
-    <name>search-service</name>
-    <description>Combined events and search service with permission-aware filtering</description>
+    <artifactId>authorization-server</artifactId>
+    <name>authorization-server</name>
+    <description>Permission management server</description>
 
     <dependencies>
-        <!-- Internal API dependencies -->
-        <dependency>
-            <groupId>com.example</groupId>
-            <artifactId>search-service-api</artifactId>
-        </dependency>
+        <!-- Internal API dependency -->
         <dependency>
             <groupId>com.example</groupId>
             <artifactId>authorization-service-api</artifactId>
@@ -33,10 +29,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-r2dbc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
         </dependency>
 
         <!-- Database drivers -->
@@ -89,17 +81,6 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-r2dbc</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>testcontainers-elasticsearch</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.wiremock</groupId>
-            <artifactId>wiremock-standalone</artifactId>
-            <version>3.3.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

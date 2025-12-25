@@ -33,12 +33,12 @@ The `nginx.conf` file provides:
 
 1. **Static File Serving**: All HTML, CSS, and JavaScript files from `html/`
 2. **Reverse Proxy**: Routes API requests to backend services
-   - `/api/v1/events` → search-service (port 8081)
-   - `/api/rpc/v1/search` → search-service (port 8081)
-   - `/api/v1/permissions` → authorization-service (port 8082)
+   - `/api/v1/events` → search-server (port 8081)
+   - `/api/rpc/v1/search` → search-server (port 8081)
+   - `/api/v1/permissions` → authorization-server (port 8082)
 3. **Swagger UI Routing**:
-   - `/search-api-docs` → search-service Swagger UI
-   - `/auth-api-docs` → authorization-service Swagger UI
+   - `/search-api-docs` → search-server Swagger UI
+   - `/auth-api-docs` → authorization-server Swagger UI
 4. **SSE Support**: Proper configuration for Server-Sent Events streaming
 
 ## UI Pages
@@ -70,7 +70,7 @@ To modify the UI:
 2. Changes are served immediately by nginx (no build step required)
 3. Use browser refresh to see updates
 
-The backend services (search-service and authorization-service) do NOT contain any UI files - this nginx directory is the single source of truth for all UI code.
+The backend services (search-server and authorization-server) do NOT contain any UI files - this nginx directory is the single source of truth for all UI code.
 
 ## Deployment
 

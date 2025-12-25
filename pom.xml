@@ -18,10 +18,10 @@
     <description>Parent POM for WebFlux SSE multi-module project</description>
 
     <modules>
-        <module>search-service-api</module>
-        <module>authorization-service-api</module>
-        <module>search-service</module>
-        <module>authorization-service</module>
+        <module>backend/search/search-service-api</module>
+        <module>backend/authorization/authorization-service-api</module>
+        <module>backend/search/search-server</module>
+        <module>backend/authorization/authorization-server</module>
     </modules>
 
     <properties>
