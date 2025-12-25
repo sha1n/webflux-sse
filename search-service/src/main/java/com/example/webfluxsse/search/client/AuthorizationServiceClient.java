@@ -1,7 +1,7 @@
 package com.example.webfluxsse.search.client;
 
-import com.example.webfluxsse.common.dto.BatchPermissionCheckRequest;
-import com.example.webfluxsse.common.dto.BatchPermissionCheckResponse;
+import com.example.webfluxsse.authorization.api.dto.BatchPermissionCheckRequest;
+import com.example.webfluxsse.authorization.api.dto.BatchPermissionCheckResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;

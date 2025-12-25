@@ -10,12 +10,12 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>common</artifactId>
-    <name>common</name>
-    <description>Common models and DTOs shared across services</description>
+    <artifactId>authorization-service-api</artifactId>
+    <name>authorization-service-api</name>
+    <description>Authorization Service API models, DTOs and contracts</description>
 
     <dependencies>
-        <!-- Spring WebFlux for WebClient and Jackson -->
+        <!-- Spring WebFlux for Jackson serialization -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
@@ -25,12 +25,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-r2dbc</artifactId>
-        </dependency>
-
-        <!-- Spring Data Elasticsearch for @Document annotations -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
         </dependency>
     </dependencies>
 </project>

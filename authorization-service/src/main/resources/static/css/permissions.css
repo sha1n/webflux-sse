@@ -1,12 +1,239 @@
-/* Permission management specific styles */
+/* Permission management specific styles - Purple Theme */
+
+.permissions-content {
+    padding: 20px;
+}
+
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 20px;
+    background: #faf5ff;
+    border-radius: 8px;
+    border: 1px solid #e9d5ff;
+}
+
+/* Status message on main page */
+.permissions-content > .status-message {
+    margin-bottom: 20px;
+}
+
+.toolbar h2 {
+    margin: 0;
+    color: #5b21b6;
+}
+
+.btn-add {
+    padding: 10px 20px;
+    background: #7c3aed;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.btn-add:hover {
+    background: #6d28d9;
+}
+
+.loading-state {
+    text-align: center;
+    padding: 40px;
+    color: #6c757d;
+    font-size: 18px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: #faf5ff;
+    border-radius: 8px;
+    border: 2px dashed #e9d5ff;
+}
+
+.empty-state p {
+    font-size: 18px;
+    color: #6c757d;
+    margin-bottom: 20px;
+}
+
+.permissions-table-container {
+    overflow-x: auto;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e9d5ff;
+}
+
+.permissions-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.permissions-table thead {
+    background: #f3e8ff;
+}
+
+.permissions-table th {
+    padding: 15px;
+    text-align: left;
+    font-weight: 600;
+    color: #5b21b6;
+    border-bottom: 2px solid #e9d5ff;
+}
+
+.permissions-table tbody tr {
+    border-bottom: 1px solid #f3e8ff;
+    transition: background-color 0.15s ease;
+}
+
+.permissions-table tbody tr:hover {
+    background: #faf5ff;
+}
+
+.permissions-table td {
+    padding: 15px;
+}
+
+.permissions-table .user-id {
+    font-weight: 600;
+    color: #5b21b6;
+}
+
+.permissions-table .event-ids {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.event-id-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: #e9d5ff;
+    color: #5b21b6;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.delete-badge-btn {
+    background: none;
+    border: none;
+    color: #9333ea;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 4px;
+    line-height: 1;
+    transition: color 0.15s ease;
+}
+
+.delete-badge-btn:hover {
+    color: #7c3aed;
+}
+
+.permissions-table .count {
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.btn-action {
+    padding: 6px 12px;
+    background: #7c3aed;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.btn-action:hover {
+    background: #6d28d9;
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 8px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(124, 58, 237, 0.3);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 2px solid #e9d5ff;
+    background: #faf5ff;
+}
+
+.modal-header h2 {
+    margin: 0;
+    color: #5b21b6;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 32px;
+    color: #9333ea;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease;
+}
+
+.modal-close:hover {
+    color: #7c3aed;
+}
+
+.modal-body {
+    padding: 30px;
+}
+
+.modal-description {
+    color: #6c757d;
+    margin-bottom: 20px;
+}
 
 .form-container {
     max-width: 600px;
     margin: 20px auto;
     padding: 30px;
-    background: #f8f9fa;
+    background: #faf5ff;
     border-radius: 8px;
-    border: 1px solid #dee2e6;
+    border: 1px solid #e9d5ff;
 }
 
 .form-group {
@@ -32,8 +259,8 @@
 
 .form-group input:focus {
     outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    border-color: #7c3aed;
+    box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.25);
 }
 
 .form-group input[type="checkbox"] {
@@ -74,7 +301,7 @@
 
 .btn-submit {
     padding: 12px 24px;
-    background: #28a745;
+    background: #7c3aed;
     color: white;
     border: none;
     border-radius: 4px;
@@ -84,11 +311,11 @@
 }
 
 .btn-submit:hover:not(:disabled) {
-    background: #218838;
+    background: #6d28d9;
 }
 
 .btn-submit:disabled {
-    background: #6c757d;
+    background: #a78bfa;
     cursor: not-allowed;
 }
 
@@ -107,10 +334,15 @@
     transition: background-color 0.15s ease-in-out;
 }
 
-.btn-cancel:hover {
+.btn-cancel:hover:not(:disabled) {
     background: #5a6268;
     text-decoration: none;
     color: white;
+}
+
+.btn-cancel:disabled {
+    background: #adb5bd;
+    cursor: not-allowed;
 }
 
 .status-message {
@@ -147,15 +379,17 @@
 .nav-breadcrumb {
     margin-bottom: 20px;
     font-size: 14px;
+    padding: 15px 20px;
 }
 
 .nav-breadcrumb a {
-    color: #007bff;
+    color: #7c3aed;
     text-decoration: none;
 }
 
 .nav-breadcrumb a:hover {
     text-decoration: underline;
+    color: #6d28d9;
 }
 
 .nav-breadcrumb span {

@@ -1,8 +1,8 @@
 package com.example.webfluxsse.authorization.controller;
 
-import com.example.webfluxsse.common.dto.BatchPermissionCheckRequest;
-import com.example.webfluxsse.common.dto.BatchPermissionCheckResponse;
-import com.example.webfluxsse.common.model.UserEventPermission;
+import com.example.webfluxsse.authorization.api.dto.BatchPermissionCheckRequest;
+import com.example.webfluxsse.authorization.api.dto.BatchPermissionCheckResponse;
+import com.example.webfluxsse.authorization.api.model.UserEventPermission;
 import com.example.webfluxsse.authorization.repository.UserEventPermissionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

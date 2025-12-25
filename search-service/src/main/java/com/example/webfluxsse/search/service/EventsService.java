@@ -1,6 +1,6 @@
 package com.example.webfluxsse.search.service;
 
-import com.example.webfluxsse.common.model.Event;
+import com.example.webfluxsse.search.api.model.Event;
 import com.example.webfluxsse.search.repository.elasticsearch.EventElasticsearchRepository;
 import com.example.webfluxsse.search.repository.r2dbc.EventRepository;
 import org.slf4j.Logger;

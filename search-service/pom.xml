@@ -15,10 +15,14 @@
     <description>Combined events and search service with permission-aware filtering</description>
 
     <dependencies>
-        <!-- Internal dependency -->
+        <!-- Internal API dependencies -->
         <dependency>
             <groupId>com.example</groupId>
-            <artifactId>common</artifactId>
+            <artifactId>search-service-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.example</groupId>
+            <artifactId>authorization-service-api</artifactId>
         </dependency>
 
         <!-- Spring Boot starters -->
@@ -76,6 +80,12 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-elasticsearch</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>3.3.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

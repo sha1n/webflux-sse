@@ -1,6 +1,6 @@
 package com.example.webfluxsse.search.repository.elasticsearch;
 
-import com.example.webfluxsse.common.model.Event;
+import com.example.webfluxsse.search.api.model.Event;
 import org.springframework.data.elasticsearch.repository.ReactiveElasticsearchRepository;
 import reactor.core.publisher.Flux;
 

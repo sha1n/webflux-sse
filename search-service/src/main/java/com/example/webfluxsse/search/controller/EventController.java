@@ -1,6 +1,6 @@
 package com.example.webfluxsse.search.controller;
 
-import com.example.webfluxsse.common.model.Event;
+import com.example.webfluxsse.search.api.model.Event;
 import com.example.webfluxsse.search.service.EventsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

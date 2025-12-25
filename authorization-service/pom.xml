@@ -15,10 +15,10 @@
     <description>Permission management service</description>
 
     <dependencies>
-        <!-- Internal dependency -->
+        <!-- Internal API dependency -->
         <dependency>
             <groupId>com.example</groupId>
-            <artifactId>common</artifactId>
+            <artifactId>authorization-service-api</artifactId>
         </dependency>
 
         <!-- Spring Boot starters -->

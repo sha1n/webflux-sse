@@ -1,6 +1,6 @@
 package com.example.webfluxsse.search;
 
-import com.example.webfluxsse.common.model.Event;
+import com.example.webfluxsse.search.api.model.Event;
 import com.example.webfluxsse.search.repository.elasticsearch.EventElasticsearchRepository;
 import com.example.webfluxsse.search.repository.r2dbc.EventRepository;
 import org.junit.jupiter.api.BeforeEach;

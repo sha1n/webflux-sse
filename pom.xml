@@ -18,7 +18,8 @@
     <description>Parent POM for WebFlux SSE multi-module project</description>
 
     <modules>
-        <module>common</module>
+        <module>search-service-api</module>
+        <module>authorization-service-api</module>
         <module>search-service</module>
         <module>authorization-service</module>
     </modules>
@@ -33,10 +34,15 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Internal modules -->
+            <!-- Internal API modules -->
             <dependency>
                 <groupId>com.example</groupId>
-                <artifactId>common</artifactId>
+                <artifactId>search-service-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>authorization-service-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

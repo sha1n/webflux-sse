@@ -1,7 +1,7 @@
 package com.example.webfluxsse.search.service;
 
-import com.example.webfluxsse.common.dto.BatchPermissionCheckResponse;
-import com.example.webfluxsse.common.model.Event;
+import com.example.webfluxsse.authorization.api.dto.BatchPermissionCheckResponse;
+import com.example.webfluxsse.search.api.model.Event;
 import com.example.webfluxsse.search.client.AuthorizationServiceClient;
 import com.example.webfluxsse.search.repository.elasticsearch.EventElasticsearchRepository;
 import org.slf4j.Logger;

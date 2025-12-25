@@ -1,4 +1,4 @@
-package com.example.webfluxsse.common.model;
+package com.example.webfluxsse.search.api.model;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.Document;

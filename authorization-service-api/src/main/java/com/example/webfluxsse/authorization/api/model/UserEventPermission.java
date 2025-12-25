@@ -1,4 +1,4 @@
-package com.example.webfluxsse.common.model;
+package com.example.webfluxsse.authorization.api.model;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;

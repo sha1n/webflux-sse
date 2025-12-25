@@ -1,3 +1,3 @@
-package com.example.webfluxsse.common.dto;
+package com.example.webfluxsse.authorization.api.dto;
 
 public record PermissionCheckResponse(Long eventId, String userId, boolean hasPermission) {}

@@ -1,6 +1,6 @@
 package com.example.webfluxsse.search.controller;
 
-import com.example.webfluxsse.common.model.Event;
+import com.example.webfluxsse.search.api.model.Event;
 import com.example.webfluxsse.search.service.SearchService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;

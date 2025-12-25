@@ -1,10 +1,12 @@
 package com.example.webfluxsse.search;
 
-import com.example.webfluxsse.common.model.Event;
-import com.example.webfluxsse.common.model.UserEventPermission;
+import com.example.webfluxsse.search.api.model.Event;
 import com.example.webfluxsse.search.repository.elasticsearch.EventElasticsearchRepository;
 import com.example.webfluxsse.search.repository.r2dbc.EventRepository;
-import com.example.webfluxsse.search.repository.r2dbc.UserEventPermissionRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.client.WireMock;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,7 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.elasticsearch.ElasticsearchContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -24,8 +26,10 @@ import reactor.test.StepVerifier;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "spring.profiles.active=it")
 @AutoConfigureWebTestClient
@@ -34,7 +38,7 @@ import java.util.List;
 class StreamingSearchIT {
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:15-alpine")
             .withDatabaseName("testdb")
             .withUsername("testuser")
             .withPassword("testpass")
@@ -47,6 +51,8 @@ class StreamingSearchIT {
             .withEnv("xpack.security.enabled", "false")
             .withStartupTimeout(Duration.ofMinutes(2));
 
+    private static WireMockServer wireMockServer;
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.r2dbc.url",
@@ -55,6 +61,14 @@ class StreamingSearchIT {
         registry.add("spring.r2dbc.password", postgres::getPassword);
         registry.add("spring.elasticsearch.uris",
                 () -> "http://" + elasticsearch.getHost() + ":" + elasticsearch.getFirstMappedPort());
+
+        // Configure WireMock server for authorization-service with dynamic port
+        if (wireMockServer == null) {
+            wireMockServer = new WireMockServer(0); // Use dynamic port
+            wireMockServer.start();
+        }
+        WireMock.configureFor("localhost", wireMockServer.port());
+        registry.add("authorization-service.base-url", () -> "http://localhost:" + wireMockServer.port());
     }
 
     @Autowired
@@ -67,18 +81,23 @@ class StreamingSearchIT {
     private EventElasticsearchRepository elasticsearchRepository;
 
     @Autowired
-    private UserEventPermissionRepository permissionRepository;
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
         elasticsearchRepository.deleteAll().block();
-        permissionRepository.deleteAll().block();
         eventRepository.deleteAll().block();
+        wireMockServer.resetAll();
+    }
+
+    @AfterEach
+    void tearDown() {
+        wireMockServer.resetAll();
     }
 
     @Test
     @DisplayName("Should stream search results using NDJSON")
-    void shouldStreamSearchResultsUsingNdjson() throws InterruptedException {
+    void shouldStreamSearchResultsUsingNdjson() throws Exception {
         // 1. Create and Index Events (25 events to test batching > 20)
         int totalEvents = 25;
         List<Event> events = new ArrayList<>();
@@ -92,19 +111,58 @@ class StreamingSearchIT {
         // 2. Index in Elasticsearch
         elasticsearchRepository.saveAll(events).collectList().block();
 
-        // 3. Grant Permissions for all odd numbered events (12 events)
-        List<UserEventPermission> permissions = new ArrayList<>();
+        // 3. Determine which events user1 should have access to (odd numbered events = 12 events)
+        Set<Long> authorizedEventIds = new HashSet<>();
         for (int i = 0; i < totalEvents; i++) {
             if (i % 2 != 0) {
-                permissions.add(new UserEventPermission(events.get(i).getId(), userId));
+                authorizedEventIds.add(events.get(i).getId());
             }
         }
-        permissionRepository.saveAll(permissions).collectList().block();
+
+        // 4. Mock the authorization-service batch-check endpoint
+        // The SearchService buffers in batches of 20, so we need to mock responses for each batch
+        List<Long> allEventIds = events.stream().map(Event::getId).collect(Collectors.toList());
+
+        // Mock for first batch (events 0-19, which is 20 events)
+        List<Long> batch1Ids = allEventIds.subList(0, Math.min(20, allEventIds.size()));
+        Set<Long> batch1Authorized = batch1Ids.stream()
+                .filter(authorizedEventIds::contains)
+                .collect(Collectors.toSet());
+
+        stubFor(post(urlEqualTo("/api/permissions/batch-check"))
+                .withRequestBody(matchingJsonPath("$.userId", equalTo(userId)))
+                .withRequestBody(matchingJsonPath("$.eventIds[0]", equalTo(String.valueOf(batch1Ids.get(0)))))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(objectMapper.writeValueAsString(Map.of(
+                                "userId", userId,
+                                "authorizedEventIds", batch1Authorized
+                        )))));
+
+        // Mock for second batch (events 20-24, which is 5 events)
+        if (allEventIds.size() > 20) {
+            List<Long> batch2Ids = allEventIds.subList(20, allEventIds.size());
+            Set<Long> batch2Authorized = batch2Ids.stream()
+                    .filter(authorizedEventIds::contains)
+                    .collect(Collectors.toSet());
+
+            stubFor(post(urlEqualTo("/api/permissions/batch-check"))
+                    .withRequestBody(matchingJsonPath("$.userId", equalTo(userId)))
+                    .withRequestBody(matchingJsonPath("$.eventIds[0]", equalTo(String.valueOf(batch2Ids.get(0)))))
+                    .willReturn(aResponse()
+                            .withStatus(200)
+                            .withHeader("Content-Type", "application/json")
+                            .withBody(objectMapper.writeValueAsString(Map.of(
+                                    "userId", userId,
+                                    "authorizedEventIds", batch2Authorized
+                            )))));
+        }
 
         // Allow ES to refresh
         Thread.sleep(2000);
 
-        // 4. Perform Search
+        // 5. Perform Search
         Flux<Event> responseBody = webTestClient.get()
                 .uri("/api/search?q=Stream")
                 .header("X-User-Id", userId)
@@ -115,7 +173,7 @@ class StreamingSearchIT {
                 .returnResult(Event.class)
                 .getResponseBody();
 
-        // 5. Verify using StepVerifier
+        // 6. Verify using StepVerifier
         StepVerifier.create(responseBody)
                 .expectNextCount(12) // We expect 12 events (odd numbers from 0-24)
                 .verifyComplete();

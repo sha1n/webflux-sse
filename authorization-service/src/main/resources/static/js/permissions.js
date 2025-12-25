@@ -1,4 +1,4 @@
-const { useState } = React;
+const { useState, useEffect } = React;
 
 function PermissionManagement() {
     const [formData, setFormData] = useState({
@@ -7,6 +7,42 @@ function PermissionManagement() {
     });
     const [status, setStatus] = useState({ type: '', message: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+    const [permissions, setPermissions] = useState([]);
+    const [isLoadingPermissions, setIsLoadingPermissions] = useState(true);
+
+    // Fetch all permissions
+    const fetchPermissions = async () => {
+        setIsLoadingPermissions(true);
+        try {
+            const response = await fetch('/api/permissions');
+            if (response.ok) {
+                const data = await response.json();
+                setPermissions(data);
+            } else {
+                console.error('Failed to fetch permissions:', response.status);
+            }
+        } catch (error) {
+            console.error('Error fetching permissions:', error);
+        } finally {
+            setIsLoadingPermissions(false);
+        }
+    };
+
+    // Load permissions on mount
+    useEffect(() => {
+        fetchPermissions();
+    }, []);
+
+    // Group permissions by user
+    const groupedPermissions = permissions.reduce((acc, permission) => {
+        const userId = permission.userId;
+        if (!acc[userId]) {
+            acc[userId] = [];
+        }
+        acc[userId].push(permission.eventId);
+        return acc;
+    }, {});
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -18,7 +54,7 @@ function PermissionManagement() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         // Validation
         if (!formData.userId || !formData.eventIds) {
             setStatus({
@@ -30,7 +66,7 @@ function PermissionManagement() {
 
         // Parse event IDs (supports both single and comma-separated)
         const eventIdsInput = formData.eventIds.trim();
-        const eventIds = eventIdsInput.includes(',') 
+        const eventIds = eventIdsInput.includes(',')
             ? eventIdsInput.split(',').map(id => id.trim()).filter(id => id)
             : [eventIdsInput];
 
@@ -50,10 +86,6 @@ function PermissionManagement() {
 
         const isBulk = validEventIds.length > 1;
         setIsSubmitting(true);
-        setStatus({ 
-            type: 'info', 
-            message: isBulk ? `Creating ${validEventIds.length} permissions...` : 'Creating permission...'
-        });
 
         try {
             if (isBulk) {
@@ -72,10 +104,24 @@ function PermissionManagement() {
                 if (response.ok) {
                     const result = await response.json();
                     const skipped = validEventIds.length - result.length;
+
+                    // Close modal immediately
+                    setShowModal(false);
+                    setFormData({ userId: '', eventIds: '' });
+
+                    // Show success message on main page
                     setStatus({
                         type: 'success',
                         message: `${result.length} permissions created successfully!${skipped > 0 ? ` (${skipped} already existed)` : ''}`
                     });
+
+                    // Auto-clear message after 5 seconds
+                    setTimeout(() => {
+                        setStatus({ type: '', message: '' });
+                    }, 5000);
+
+                    // Refresh permissions list
+                    fetchPermissions();
                 } else {
                     const errorText = await response.text();
                     setStatus({
@@ -98,10 +144,24 @@ function PermissionManagement() {
 
                 if (response.ok) {
                     const result = await response.json();
+
+                    // Close modal immediately
+                    setShowModal(false);
+                    setFormData({ userId: '', eventIds: '' });
+
+                    // Show success message on main page
                     setStatus({
                         type: 'success',
                         message: `Permission created successfully! Permission ID: ${result.id}`
                     });
+
+                    // Auto-clear message after 5 seconds
+                    setTimeout(() => {
+                        setStatus({ type: '', message: '' });
+                    }, 5000);
+
+                    // Refresh permissions list
+                    fetchPermissions();
                 } else {
                     const errorText = await response.text();
                     setStatus({
@@ -110,9 +170,6 @@ function PermissionManagement() {
                     });
                 }
             }
-
-            // Reset form on success
-            setFormData({ userId: '', eventIds: '' });
         } catch (error) {
             setStatus({
                 type: 'error',
@@ -123,19 +180,54 @@ function PermissionManagement() {
         }
     };
 
+    const handleOpenModal = (userId = '') => {
+        setFormData({ userId, eventIds: '' });
+        setStatus({ type: '', message: '' });
+        setShowModal(true);
+    };
+
+    const handleCloseModal = () => {
+        setShowModal(false);
+        setStatus({ type: '', message: '' });
+    };
+
+    const handleDeletePermission = async (userId, eventId) => {
+        if (!confirm(`Delete permission for user "${userId}" on event ${eventId}?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/permissions/event/${eventId}/user/${userId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                // Refresh permissions list
+                fetchPermissions();
+            } else {
+                alert(`Failed to delete permission: ${response.status}`);
+            }
+        } catch (error) {
+            alert(`Error deleting permission: ${error.message}`);
+        }
+    };
+
     return (
         <div className="container">
             <div className="header">
                 <h1>Permission Management</h1>
             </div>
-            
-            <div className="nav-breadcrumb">
-                <a href="/index.html">← Back to Dashboard</a>
-            </div>
 
-            <div className="form-container">
-                <h2>Add User Permission</h2>
-                <p>Grant a user access to view one or multiple events</p>
+            <div className="permissions-content">
+                <div className="toolbar">
+                    <h2>User Permissions ({Object.keys(groupedPermissions).length} users)</h2>
+                    <button
+                        className="btn-add"
+                        onClick={() => handleOpenModal()}
+                    >
+                        + Add Permission
+                    </button>
+                </div>
 
                 {status.message && (
                     <div className={`status-message status-${status.type}`}>
@@ -143,55 +235,145 @@ function PermissionManagement() {
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label htmlFor="userId">User ID</label>
-                        <input
-                            type="text"
-                            id="userId"
-                            name="userId"
-                            value={formData.userId}
-                            onChange={handleInputChange}
-                            placeholder="Enter user identifier (e.g., user123)"
-                            disabled={isSubmitting}
-                            required
-                        />
-                        <div className="form-help">
-                            Enter the unique identifier for the user
-                        </div>
-                    </div>
-
-                    <div className="form-group">
-                        <label htmlFor="eventIds">Event ID(s)</label>
-                        <input
-                            type="text"
-                            id="eventIds"
-                            name="eventIds"
-                            value={formData.eventIds}
-                            onChange={handleInputChange}
-                            placeholder="Enter event ID or multiple IDs separated by commas (e.g., 8 or 1, 2, 3)"
-                            disabled={isSubmitting}
-                            required
-                        />
-                        <div className="form-help">
-                            Enter a single event ID (e.g., 8) or multiple IDs separated by commas (e.g., 1, 2, 3)
-                        </div>
-                    </div>
-
-                    <div className="form-actions">
-                        <button 
-                            type="submit" 
-                            className="btn-submit"
-                            disabled={isSubmitting}
-                        >
-                            {isSubmitting ? 'Creating Permission(s)...' : 'Create Permission(s)'}
+                {isLoadingPermissions ? (
+                    <div className="loading-state">Loading permissions...</div>
+                ) : permissions.length === 0 ? (
+                    <div className="empty-state">
+                        <p>No permissions configured yet.</p>
+                        <button className="btn-submit" onClick={() => handleOpenModal()}>
+                            Create First Permission
                         </button>
-                        <a href="/index.html" className="btn-cancel">
-                            Cancel
-                        </a>
                     </div>
-                </form>
+                ) : (
+                    <div className="permissions-table-container">
+                        <table className="permissions-table">
+                            <thead>
+                                <tr>
+                                    <th>User ID</th>
+                                    <th>Permitted Event IDs</th>
+                                    <th>Count</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {Object.entries(groupedPermissions)
+                                    .sort(([userA], [userB]) => userA.localeCompare(userB))
+                                    .map(([userId, eventIds]) => (
+                                    <tr key={userId}>
+                                        <td className="user-id">{userId}</td>
+                                        <td className="event-ids">
+                                            {eventIds.sort((a, b) => a - b).map(eventId => (
+                                                <span key={eventId} className="event-id-badge">
+                                                    {eventId}
+                                                    <button
+                                                        className="delete-badge-btn"
+                                                        onClick={() => handleDeletePermission(userId, eventId)}
+                                                        title="Remove permission"
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </span>
+                                            ))}
+                                        </td>
+                                        <td className="count">{eventIds.length}</td>
+                                        <td className="actions">
+                                            <button
+                                                className="btn-action"
+                                                onClick={() => handleOpenModal(userId)}
+                                            >
+                                                Add More
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
+
+            {/* Modal for adding permissions */}
+            {showModal && (
+                <div className="modal-overlay" onClick={handleCloseModal}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>Add User Permission</h2>
+                            <button
+                                className="modal-close"
+                                onClick={handleCloseModal}
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <div className="modal-body">
+                            <p className="modal-description">
+                                Grant a user access to view one or multiple events
+                            </p>
+
+                            {status.message && (
+                                <div className={`status-message status-${status.type}`}>
+                                    {status.message}
+                                </div>
+                            )}
+
+                            <form onSubmit={handleSubmit}>
+                                <div className="form-group">
+                                    <label htmlFor="userId">User ID</label>
+                                    <input
+                                        type="text"
+                                        id="userId"
+                                        name="userId"
+                                        value={formData.userId}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter user identifier (e.g., user123)"
+                                        disabled={isSubmitting}
+                                        required
+                                    />
+                                    <div className="form-help">
+                                        Enter the unique identifier for the user
+                                    </div>
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="eventIds">Event ID(s)</label>
+                                    <input
+                                        type="text"
+                                        id="eventIds"
+                                        name="eventIds"
+                                        value={formData.eventIds}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter event ID or multiple IDs separated by commas (e.g., 8 or 1, 2, 3)"
+                                        disabled={isSubmitting}
+                                        required
+                                    />
+                                    <div className="form-help">
+                                        Enter a single event ID (e.g., 8) or multiple IDs separated by commas (e.g., 1, 2, 3)
+                                    </div>
+                                </div>
+
+                                <div className="form-actions">
+                                    <button
+                                        type="submit"
+                                        className="btn-submit"
+                                        disabled={isSubmitting}
+                                    >
+                                        {isSubmitting ? 'Creating Permission(s)...' : 'Create Permission(s)'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn-cancel"
+                                        onClick={handleCloseModal}
+                                        disabled={isSubmitting}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
