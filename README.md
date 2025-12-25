@@ -710,3 +710,30 @@ Both services log their activities. You can see:
 ```
 
 This stops all services and Docker containers.
+## Nginx Gateway
+
+The application includes an **Nginx reverse proxy** that serves as the unified entry point:
+
+### Features
+- **Port 80 Access**: All services accessible through `http://localhost`
+- **Static File Serving**: HTML, CSS, and JavaScript served directly by Nginx
+- **API Routing**:
+  - `/api/v1/events` → search-service (port 8081)
+  - `/api/rpc/v1/search` → search-service (port 8081)  
+  - `/api/v1/permissions` → authorization-service (port 8082)
+  - `/swagger-ui.html` → routed to appropriate backend service
+- **SSE Support**: Proper configuration for Server-Sent Events with disabled buffering
+- **Health Endpoint**: `/health` for monitoring
+
+### Configuration
+- **nginx.conf**: Main configuration file at `nginx/nginx.conf`
+- **Static Files**: Auto-generated from both services into `nginx/html/` (excluded from git)
+- **Docker**: Runs as a container with `host.docker.internal` for backend access
+
+### Updating Static Files
+When UI files change, run:
+```bash
+./prepare-nginx-static.sh
+```
+
+This script collects and merges static files from both services into the nginx directory.

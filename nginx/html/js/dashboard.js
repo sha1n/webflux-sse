@@ -57,7 +57,7 @@ function EventDashboard() {
     return (
         <>
             <div className="api-docs-ribbon">
-                <a href="/swagger-ui.html" target="_blank">
+                <a href="/search-docs/swagger-ui.html" target="_blank">
                     API Docs
                 </a>
             </div>
@@ -75,7 +75,7 @@ function EventDashboard() {
                 <div className="nav">
                     <a href="/create.html">+ Create New Event</a>
                     <a href="/search.html">Search Events</a>
-                    <a href="http://localhost:8082/permissions.html" target="_blank">Manage Permissions ↗</a>
+                    <a href="/permissions.html">Manage Permissions</a>
                 </div>
             <div className="table-container">
                 {events.length === 0 ? (

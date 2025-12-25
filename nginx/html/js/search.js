@@ -93,7 +93,7 @@ function SearchApp() {
     return (
         <>
             <div className="api-docs-ribbon">
-                <a href="/swagger-ui.html" target="_blank">
+                <a href="/search-docs/swagger-ui.html" target="_blank">
                     API Docs
                 </a>
             </div>

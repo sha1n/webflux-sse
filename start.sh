@@ -19,16 +19,17 @@ check_docker() {
     echo -e "${GREEN}✅ Docker is running${NC}"
 }
 
+
 # Function to start database
 start_database() {
-    echo -e "${BLUE}📦 Starting PostgreSQL database...${NC}"
-    
+    echo -e "${BLUE}📦 Starting Docker containers (PostgreSQL, Elasticsearch, Nginx)...${NC}"
+
     # Stop existing containers if they exist
     docker-compose down > /dev/null 2>&1
-    
+
     # Start the database
     if docker-compose up -d; then
-        echo -e "${GREEN}✅ Database container started${NC}"
+        echo -e "${GREEN}✅ Docker containers started${NC}"
         
         # Wait for database to be ready
         echo -e "${YELLOW}⏳ Waiting for database to be ready...${NC}"
@@ -80,7 +81,7 @@ start_applications() {
     echo -e "${YELLOW}⏳ Waiting for authorization-service to start...${NC}"
     timeout=120
     while [ $timeout -gt 0 ]; do
-        if curl -s http://localhost:8082/api/permissions > /dev/null 2>&1; then
+        if curl -s http://localhost:8082/api/v1/permissions > /dev/null 2>&1; then
             echo -e "${GREEN}✅ Authorization-service is running on port 8082!${NC}"
             break
         fi
@@ -97,7 +98,7 @@ start_applications() {
     echo -e "${YELLOW}⏳ Waiting for search-service to start...${NC}"
     timeout=120
     while [ $timeout -gt 0 ]; do
-        if curl -s http://localhost:8081/api/events > /dev/null 2>&1; then
+        if curl -s http://localhost:8081/api/v1/events > /dev/null 2>&1; then
             echo -e "${GREEN}✅ Search-service is running on port 8081!${NC}"
             break
         fi
@@ -117,12 +118,18 @@ show_info() {
     echo -e "${GREEN}🎉 Setup complete!${NC}"
     echo
     echo -e "${BLUE}📱 Application URLs:${NC}"
-    echo -e "   🌐 Search Service (Events + Search): ${YELLOW}http://localhost:8081${NC}"
-    echo -e "   📡 SSE Stream: ${YELLOW}http://localhost:8081/api/events/stream${NC}"
-    echo -e "   📊 Events API: ${YELLOW}http://localhost:8081/api/events${NC}"
-    echo -e "   🔍 Search API: ${YELLOW}http://localhost:8081/api/search${NC}"
-    echo -e "   🔐 Authorization Service: ${YELLOW}http://localhost:8082${NC}"
-    echo -e "   🔑 Permissions API: ${YELLOW}http://localhost:8082/api/permissions${NC}"
+    echo -e "   🌐 Main UI (Nginx Gateway): ${YELLOW}http://localhost${NC}"
+    echo -e "   📡 SSE Stream: ${YELLOW}http://localhost/api/v1/events${NC}"
+    echo -e "   🔍 Search: ${YELLOW}http://localhost/search.html${NC}"
+    echo -e "   🔐 Permissions: ${YELLOW}http://localhost/permissions.html${NC}"
+    echo
+    echo -e "${BLUE}🔧 Backend Services (Direct Access):${NC}"
+    echo -e "   Search Service: ${YELLOW}http://localhost:8081${NC}"
+    echo -e "   Authorization Service: ${YELLOW}http://localhost:8082${NC}"
+    echo
+    echo -e "${BLUE}📚 API Documentation:${NC}"
+    echo -e "   Search Service API: ${YELLOW}http://localhost:8081/swagger-ui.html${NC}"
+    echo -e "   Authorization Service API: ${YELLOW}http://localhost:8082/swagger-ui.html${NC}"
     echo
     echo -e "${BLUE}🗃️ Database Connection:${NC}"
     echo -e "   🔗 Host: ${YELLOW}localhost:5432${NC}"
@@ -131,8 +138,8 @@ show_info() {
     echo
     echo -e "${BLUE}📋 Available Commands:${NC}"
     echo -e "   🛑 Stop all services: ${YELLOW}./stop.sh${NC}"
-    echo -e "   🛑 Stop database: ${YELLOW}docker-compose down${NC}"
-    echo -e "   📄 View database logs: ${YELLOW}docker-compose logs postgres${NC}"
+    echo -e "   🛑 Stop containers: ${YELLOW}docker-compose down${NC}"
+    echo -e "   📄 View logs: ${YELLOW}docker-compose logs [postgres|elasticsearch|nginx]${NC}"
     echo -e "   🔍 Connect to database: ${YELLOW}docker-compose exec postgres psql -U postgres -d eventdb${NC}"
     echo
     echo -e "${GREEN}Press Ctrl+C to stop all applications${NC}"
@@ -160,6 +167,7 @@ trap cleanup INT TERM
 
 # Main execution
 check_docker
+./configure-nginx-host.sh
 start_database
 start_applications
 show_info

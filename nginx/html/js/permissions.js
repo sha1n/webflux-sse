@@ -215,7 +215,7 @@ function PermissionManagement() {
     return (
         <>
             <div className="api-docs-ribbon">
-                <a href="/swagger-ui.html" target="_blank">
+                <a href="/auth-docs/swagger-ui.html" target="_blank">
                     API Docs
                 </a>
             </div>
@@ -225,7 +225,7 @@ function PermissionManagement() {
                 </div>
 
                 <div className="nav">
-                    <a href="http://localhost:8081/" target="_blank">← Back to Events Dashboard ↗</a>
+                    <a href="/">← Back to Events Dashboard</a>
                     <span className="current">Manage Permissions</span>
                 </div>
 
