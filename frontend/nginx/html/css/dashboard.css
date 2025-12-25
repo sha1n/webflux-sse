@@ -15,6 +15,10 @@
     color: #28a745;
 }
 
+.connecting {
+    color: #6c757d;
+}
+
 .disconnected {
     color: #dc3545;
 }
@@ -70,6 +74,22 @@ tr:hover {
     text-align: center;
     padding: 40px;
     color: #666;
+}
+
+.empty-message {
+    text-align: center;
+    padding: 40px !important;
+    color: #666;
+    font-style: italic;
+}
+
+.empty-message a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.empty-message a:hover {
+    text-decoration: underline;
 }
 
 /* Dashboard-specific navigation styling */

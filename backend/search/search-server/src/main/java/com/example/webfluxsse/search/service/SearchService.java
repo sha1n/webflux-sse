@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
+
 @Service
 @ConditionalOnProperty(name = "spring.elasticsearch.uris")
 public class SearchService {
@@ -38,7 +40,7 @@ public class SearchService {
 
         // Search in Elasticsearch
         return elasticsearchRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(query, query)
-                .buffer(20)
+                .bufferTimeout(20, Duration.ofSeconds(5))
                 .flatMap(batch -> checkPermissionsBatch(batch, userId))
                 .flatMapIterable(java.util.function.Function.identity())
                 .map(EventMapper::toDto)

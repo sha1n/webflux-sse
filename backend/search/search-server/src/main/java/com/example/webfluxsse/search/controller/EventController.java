@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -48,10 +49,22 @@ public class EventController {
         )
     })
     @GetMapping(value = "/api/v1/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<Event> streamEvents() {
+    public Flux<ServerSentEvent<Event>> streamEvents() {
         log.info("Starting SSE stream for events");
         return Flux.interval(Duration.ofSeconds(2))
-                .flatMap(tick -> eventsService.getAllEvents())
+                .flatMap(tick -> {
+                    Flux<ServerSentEvent<Event>> dataEvents = eventsService.getAllEvents()
+                            .map(event -> ServerSentEvent.builder(event).build());
+
+                    // Send a heartbeat event when there are no events to keep connection alive
+                    Flux<ServerSentEvent<Event>> heartbeat = Flux.just(
+                            ServerSentEvent.<Event>builder()
+                                    .event("heartbeat")
+                                    .build()
+                    );
+
+                    return dataEvents.switchIfEmpty(heartbeat);
+                })
                 .distinctUntilChanged()
                 .doOnSubscribe(sub -> log.info("Client subscribed to event stream"))
                 .doOnCancel(() -> log.info("Client cancelled event stream"));

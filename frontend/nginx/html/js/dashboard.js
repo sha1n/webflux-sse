@@ -2,46 +2,67 @@ const { useState, useEffect } = React;
 
 function EventDashboard() {
     const [events, setEvents] = useState([]);
-    const [connectionStatus, setConnectionStatus] = useState('disconnected');
+    const [connectionStatus, setConnectionStatus] = useState('connecting');
 
     useEffect(() => {
         const eventSource = new EventSource('/api/v1/events');
         let currentBatch = [];
         let batchTimeout = null;
+        let canShowDisconnected = false;
+
+        // After 3 seconds, allow showing disconnected status
+        const allowDisconnectTimeout = setTimeout(() => {
+            canShowDisconnected = true;
+        }, 3000);
 
         eventSource.onopen = () => {
+            console.log('✅ SSE connection opened');
             setConnectionStatus('connected');
         };
 
+        // Handle heartbeat events (sent when there are no data events)
+        eventSource.addEventListener('heartbeat', () => {
+            console.log('💓 Received heartbeat');
+            setConnectionStatus('connected');
+        });
+
         eventSource.onmessage = (event) => {
+            setConnectionStatus('connected');
+
             try {
                 const eventData = JSON.parse(event.data);
-                
-                // Add event to current batch
+                console.log('📨 Received event:', eventData);
+
                 currentBatch.push(eventData);
-                
-                // Clear any existing timeout
+
                 if (batchTimeout) {
                     clearTimeout(batchTimeout);
                 }
-                
-                // Set a timeout to process the batch after events stop coming
+
                 batchTimeout = setTimeout(() => {
-                    // Events are already in DESC order from DB, so keep them in that order
                     setEvents(currentBatch.slice(0, 100));
-                    currentBatch = []; // Clear batch for next cycle
-                }, 100); // Wait 100ms after last event to process batch
-                
+                    currentBatch = [];
+                }, 100);
+
             } catch (error) {
-                console.error('Error parsing event data:', error);
+                console.error('❌ Error parsing event data:', error);
             }
         };
 
-        eventSource.onerror = () => {
-            setConnectionStatus('disconnected');
+        eventSource.onerror = (error) => {
+            console.error('⚠️ SSE error:', error, 'readyState:', eventSource.readyState);
+
+            // Only show disconnected if we've waited long enough AND connection is closed
+            if (canShowDisconnected && eventSource.readyState === EventSource.CLOSED) {
+                console.log('❌ Setting status to disconnected');
+                setConnectionStatus('disconnected');
+            } else {
+                console.log('⏳ Still connecting, not showing disconnected yet');
+            }
         };
 
         return () => {
+            clearTimeout(allowDisconnectTimeout);
             if (batchTimeout) {
                 clearTimeout(batchTimeout);
             }
@@ -67,8 +88,10 @@ function EventDashboard() {
                 </div>
                 <div className="status">
                     Connection Status:
-                    <span className={connectionStatus === 'connected' ? 'connected' : 'disconnected'}>
-                        {connectionStatus === 'connected' ? ' ● Connected' : ' ● Disconnected'}
+                    <span className={connectionStatus}>
+                        {connectionStatus === 'connected' && ' ● Connected'}
+                        {connectionStatus === 'connecting' && ' ● Connecting...'}
+                        {connectionStatus === 'disconnected' && ' ● Disconnected'}
                     </span>
                     {events.length > 0 && <span> | Events: {events.length}</span>}
                 </div>
@@ -78,10 +101,28 @@ function EventDashboard() {
                     <a href="/permissions.html">Manage Permissions</a>
                 </div>
             <div className="table-container">
-                {events.length === 0 ? (
+                {connectionStatus === 'disconnected' ? (
                     <div className="empty-state">
-                        <p>No events received yet. <a href="/create.html">Create your first event</a> or make sure the database has events and the connection is established.</p>
+                        <p>⚠️ Server is not available. Please make sure the services are running.</p>
                     </div>
+                ) : connectionStatus === 'connecting' ? (
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Timestamp</th>
+                                <th>Title</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colSpan="4" className="empty-message">
+                                    Connecting to server...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 ) : (
                     <table>
                         <thead>
@@ -93,14 +134,22 @@ function EventDashboard() {
                             </tr>
                         </thead>
                         <tbody>
-                            {events.map((event) => (
-                                <tr key={event.id}>
-                                    <td className="event-id">{event.id}</td>
-                                    <td className="timestamp">{formatTimestamp(event.timestamp)}</td>
-                                    <td className="title">{event.title}</td>
-                                    <td className="description">{event.description}</td>
+                            {events.length === 0 ? (
+                                <tr>
+                                    <td colSpan="4" className="empty-message">
+                                        No events yet. <a href="/create.html">Create your first event</a>
+                                    </td>
                                 </tr>
-                            ))}
+                            ) : (
+                                events.map((event) => (
+                                    <tr key={event.id}>
+                                        <td className="event-id">{event.id}</td>
+                                        <td className="timestamp">{formatTimestamp(event.timestamp)}</td>
+                                        <td className="title">{event.title}</td>
+                                        <td className="description">{event.description}</td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 )}
@@ -110,4 +159,5 @@ function EventDashboard() {
     );
 }
 
-ReactDOM.render(<EventDashboard />, document.getElementById('root'));
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<EventDashboard />);
