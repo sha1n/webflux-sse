@@ -10,7 +10,8 @@ nginx/
 ├── html/               # UI files (HTML, CSS, JavaScript)
 │   ├── index.html      # Event Stream Dashboard (main page)
 │   ├── create.html     # Create New Event page
-│   ├── search.html     # Event Search page
+│   ├── search.html     # Event Search page (NDJSON)
+│   ├── search-sse.html # Event Search page (SSE)
 │   ├── permissions.html # Permission Management page
 │   ├── css/            # Stylesheets
 │   │   ├── common.css      # Shared styles across all pages
@@ -21,7 +22,8 @@ nginx/
 │   └── js/             # JavaScript files (React components)
 │       ├── dashboard.js    # Event stream dashboard logic
 │       ├── create-form.js  # Event creation form
-│       ├── search.js       # Search functionality
+│       ├── search.js       # Search functionality (NDJSON)
+│       ├── search-sse.js   # Search functionality (SSE)
 │       └── permissions.js  # Permission management
 └── README.md           # This file
 
@@ -35,6 +37,7 @@ The `nginx.conf` file provides:
 2. **Reverse Proxy**: Routes API requests to backend services
    - `/api/v1/events` → search-server (port 8081)
    - `/api/rpc/v1/search` → search-server (port 8081)
+   - `/api/v1/search/sse` → search-server (port 8081)
    - `/api/v1/permissions` → authorization-server (port 8082)
 3. **Swagger UI Routing**:
    - `/search-api-docs` → search-server Swagger UI
@@ -52,10 +55,17 @@ The `nginx.conf` file provides:
 - Form to create new events with title and description
 - Events appear in the dashboard stream within 2 seconds
 
-### Search Events (`search.html`)
-- Permission-aware search functionality
+### Search Events - NDJSON (`search.html`)
+- Permission-aware search functionality using NDJSON streaming
 - Filters events based on user permissions
 - Supports full-text search via Elasticsearch
+- Results delivered as newline-delimited JSON
+
+### Search Events - SSE (`search-sse.html`)
+- Permission-aware search functionality using Server-Sent Events
+- Same filtering and search capabilities as NDJSON version
+- Uses native EventSource API for real-time streaming
+- Compatible with Chrome DevTools EventStream tab
 
 ### Permission Management (`permissions.html`)
 - Manage user permissions for viewing events

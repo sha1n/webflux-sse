@@ -117,7 +117,8 @@ function EventDashboard() {
                 <div className="nav">
                     <span className="current">Dashboard</span>
                     <a href="/create.html" className="primary">+ Create Event</a>
-                    <a href="/search.html">Search</a>
+                    <a href="/search.html">Search (Stream)</a>
+                    <a href="/search-sse.html">Search (SSE)</a>
                     <a href="/permissions.html">Permissions</a>
                 </div>
             <div className="table-container">

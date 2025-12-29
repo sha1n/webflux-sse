@@ -227,7 +227,8 @@ function PermissionManagement() {
                 <div className="nav">
                     <a href="/">Dashboard</a>
                     <a href="/create.html" className="primary">+ Create Event</a>
-                    <a href="/search.html">Search</a>
+                    <a href="/search.html">Search (Stream)</a>
+                    <a href="/search-sse.html">Search (SSE)</a>
                     <span className="current">Permissions</span>
                 </div>
 
