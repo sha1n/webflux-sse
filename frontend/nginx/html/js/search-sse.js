@@ -19,10 +19,10 @@ function SearchApp() {
         setError('');
         setResults([]);
 
-        await performRegularSearch();
+        await performSseSearch();
     };
 
-    const performRegularSearch = async () => {
+    const performSseSearch = async () => {
         try {
             const url = new URL('/api/rpc/v1/search', window.location.origin);
 
@@ -30,7 +30,7 @@ function SearchApp() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/x-ndjson'
+                    'Accept': 'text/event-stream'
                 },
                 body: JSON.stringify({
                     query: query || null,
@@ -53,21 +53,41 @@ function SearchApp() {
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
 
-                // Process all complete lines
-                buffer = lines.pop(); // Keep the last partial line in buffer
+                // Keep the last partial line in buffer
+                buffer = lines.pop() || '';
 
-                const newEvents = lines
-                    .filter(line => line.trim())
-                    .map(line => JSON.parse(line));
-
-                if (newEvents.length > 0) {
-                    setResults(prev => [...prev, ...newEvents]);
+                // Process SSE format: look for 'data:' lines
+                for (const line of lines) {
+                    if (line.startsWith('data:')) {
+                        const jsonData = line.substring(5).trim(); // Remove 'data:' prefix
+                        if (jsonData) {
+                            try {
+                                const event = JSON.parse(jsonData);
+                                setResults(prev => [...prev, event]);
+                            } catch (e) {
+                                console.error('Failed to parse SSE data:', e, jsonData);
+                            }
+                        }
+                    }
                 }
             }
 
-            // Process any remaining data
-            if (buffer && buffer.trim()) {
-                setResults(prev => [...prev, JSON.parse(buffer)]);
+            // Process any remaining data in buffer
+            if (buffer.trim()) {
+                const lines = buffer.split('\n');
+                for (const line of lines) {
+                    if (line.startsWith('data:')) {
+                        const jsonData = line.substring(5).trim();
+                        if (jsonData) {
+                            try {
+                                const event = JSON.parse(jsonData);
+                                setResults(prev => [...prev, event]);
+                            } catch (e) {
+                                console.error('Failed to parse SSE data:', e, jsonData);
+                            }
+                        }
+                    }
+                }
             }
 
         } catch (err) {
@@ -99,13 +119,13 @@ function SearchApp() {
             </div>
             <div className="container">
                 <div className="header">
-                    <h1>Event Search (Streaming)</h1>
+                    <h1>Event Search (SSE)</h1>
                 </div>
                 <div className="nav">
                     <a href="/">Dashboard</a>
                     <a href="/create.html" className="primary">+ Create Event</a>
-                    <span className="current">Search (Stream)</span>
-                    <a href="/search-sse.html">Search (SSE)</a>
+                    <a href="/search.html">Search (Stream)</a>
+                    <span className="current">Search (SSE)</span>
                     <a href="/permissions.html">Permissions</a>
                 </div>
             <div className="search-container">
@@ -164,7 +184,7 @@ function SearchApp() {
 
                     {isLoading && (
                         <div className="loading">
-                            Searching events...
+                            Searching events via SSE...
                         </div>
                     )}
 

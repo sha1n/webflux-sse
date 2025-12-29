@@ -1,8 +1,8 @@
 # WebFlux SSE Event Streaming Application
 
 A microservices-based Spring WebFlux application demonstrating real-time event streaming and search with a reactive architecture. Features:
-- **SSE (Server-Sent Events)** for real-time dashboard updates
-- **NDJSON streaming** for search results
+- **SSE (Server-Sent Events)** for real-time dashboard updates and search results
+- **NDJSON streaming** for search results (alternative to SSE)
 - Dual persistence (PostgreSQL + Elasticsearch)
 - Permission-based access control
 - React frontend with distinct service themes
@@ -32,7 +32,7 @@ graph TB
     subgraph "Search Service - Port 8081"
         SearchUI[React UI<br/>Blue Theme 📊]
         EventController[EventController<br/>SSE Streaming]
-        SearchController[SearchController<br/>NDJSON Streaming]
+        SearchController[SearchController<br/>SSE + NDJSON Streaming]
         EventsService[EventsService]
         SearchService[SearchService]
         EventRepo[EventRepository<br/>Elasticsearch]
@@ -58,7 +58,7 @@ graph TB
     Browser -->|HTTP| SearchUI
     Browser -->|HTTP| AuthUI
     Browser -->|SSE| EventController
-    Browser -->|NDJSON| SearchController
+    Browser -->|SSE/NDJSON| SearchController
 
     SearchUI --> EventController
     SearchUI --> SearchController
@@ -100,7 +100,7 @@ graph TB
 2. **Permission-Aware Search Flow**:
    - Browser → Search Service → Elasticsearch (get matching events)
    - Search Service → Authorization Service (check permissions via REST API)
-   - Search Service → Browser (filtered results via NDJSON stream)
+   - Search Service → Browser (filtered results via SSE or NDJSON stream)
 
 3. **Permission Management Flow**:
    - Browser → Authorization Service → PostgreSQL
@@ -115,8 +115,8 @@ graph TB
   - Authorization Service: Purple theme (🔒)
 - **Inter-Service Communication**: REST APIs via WebClient
 - **Client Communication Protocols**:
-  - **SSE (Server-Sent Events)**: Real-time event streaming
-  - **NDJSON (Newline Delimited JSON)**: Search results streaming
+  - **SSE (Server-Sent Events)**: Real-time event streaming and search results streaming
+  - **NDJSON (Newline Delimited JSON)**: Search results streaming (alternative to SSE)
   - **JSON**: Standard REST API responses
 - **Testing**: Testcontainers with PostgreSQL and Elasticsearch for integration tests
 
@@ -211,23 +211,34 @@ You'll see only events that:
 Results stream in **NDJSON (Newline Delimited JSON)** format as they're found.
 Open the browser DevTools Network tab to see the `application/x-ndjson` response with one JSON object per line.
 
-### 6. Test Permission Filtering
+### 6. Search with Permission Filtering (SSE)
+Navigate to http://localhost:8081/search-sse.html
+
+- Enter a search query (e.g., "deployment")
+- Enter User ID: `user123`
+- Click "Search"
+
+This demonstrates the same permission-aware search but using **Server-Sent Events (SSE)** instead of NDJSON.
+Open the browser DevTools Network tab and look at the EventStream tab to see the `text/event-stream` connection.
+The SSE endpoint uses the native EventSource API, which provides automatic reconnection and is fully compatible with Chrome DevTools.
+
+### 7. Test Permission Filtering
 Try searching with a different user ID who has no permissions - you'll see no results even though events exist.
 
 Go back to the permissions page (http://localhost:8082/permissions.html) and grant permissions to the new user, then search again.
 
-### 7. Delete Individual Permissions
+### 8. Delete Individual Permissions
 On the permissions page, click the "×" button next to any event ID badge to remove that specific permission.
 The table updates immediately.
 
-### 8. View Logs
+### 9. View Logs
 Both services log their activities. You can see:
 - API calls between services
 - Permission checks
 - Event creation
 - Search queries
 
-### 9. Stop the Application
+### 10. Stop the Application
 ```bash
 ./demo/stop.sh
 ```
