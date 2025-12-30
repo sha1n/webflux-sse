@@ -7,14 +7,14 @@
     Making defensive copies would break Spring's dependency injection.
     This is the standard Spring pattern and is safe.
     -->
-    <Match>
-        <Or>
-            <Class name="~.*\.controller\..*Controller"/>
-            <Class name="~.*\.service\..*Service"/>
-            <Class name="~.*\.config\..*Config"/>
-        </Or>
-        <Bug pattern="EI_EXPOSE_REP2"/>
-    </Match>
+<!--    <Match>-->
+<!--        <Or>-->
+<!--            <Class name="~.*\.controller\..*Controller"/>-->
+<!--            <Class name="~.*\.service\..*Service"/>-->
+<!--            <Class name="~.*\.config\..*Config"/>-->
+<!--        </Or>-->
+<!--        <Bug pattern="EI_EXPOSE_REP2"/>-->
+<!--    </Match>-->
 
     <!--
     USBR_UNNECESSARY_STORE_BEFORE_RETURN:
@@ -24,7 +24,7 @@
     optimizes this pattern away at runtime. Since this is standard code generation behavior
     and not an actual code quality issue, we suppress it globally.
     -->
-    <Match>
-        <Bug pattern="USBR_UNNECESSARY_STORE_BEFORE_RETURN"/>
-    </Match>
+<!--    <Match>-->
+<!--        <Bug pattern="USBR_UNNECESSARY_STORE_BEFORE_RETURN"/>-->
+<!--    </Match>-->
 </FindBugsFilter>
