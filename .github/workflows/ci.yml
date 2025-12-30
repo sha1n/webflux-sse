@@ -37,17 +37,28 @@ jobs:
         if: always()
         run: |
           # Generate SpotBugs XML reports for all modules
-          mvn spotbugs:spotbugs --batch-mode -DskipTests=true || true
+          # Use --fail-at-end to match local builds - ensures all modules are analyzed
+          mvn spotbugs:spotbugs --batch-mode --fail-at-end -DskipTests=true || true
 
+          echo "=== Cleaning ANSI codes from XML files ==="
           # Clean ANSI color codes from XML files (they corrupt the XML)
-          find . -name "spotbugsXml.xml" -type f -exec sh -c '
-            for file; do
-              # Remove ANSI escape codes using sed
-              LC_ALL=C sed "s/$(printf "\033")\[[0-9;]*[mK]//g" "$file" > "$file.clean" && mv "$file.clean" "$file"
-            done
-          ' sh {} +
+          for file in $(find . -name "spotbugsXml.xml" -type f); do
+            echo "Cleaning: $file"
+            # Show file size before
+            ls -lh "$file"
 
-          # Find all SpotBugs XML reports
+            # Remove ANSI escape codes using perl (more portable)
+            perl -pe 's/\x1b\[[0-9;]*[mK]//g' "$file" > "$file.clean"
+            mv "$file.clean" "$file"
+
+            # Show first occurrence of BugInstance to verify
+            echo "First BugInstance tag:"
+            grep -m 1 "BugInstance" "$file" | head -c 200 || echo "  (none found)"
+            echo ""
+          done
+
+          echo ""
+          echo "=== SpotBugs XML reports ==="
           find . -name "spotbugsXml.xml" -type f
 
       - name: Parse SpotBugs results
@@ -56,22 +67,36 @@ jobs:
         run: |
           # Count total bugs across all modules
           TOTAL_BUGS=0
-          SPOTBUGS_FILES=$(find . -name "spotbugsXml.xml" -type f)
+          echo "=== Searching for SpotBugs XML files ==="
+          find . -name "spotbugsXml.xml" -type f
 
-          if [ -n "$SPOTBUGS_FILES" ]; then
-            for file in $SPOTBUGS_FILES; do
-              BUGS=$(grep -c "<BugInstance" "$file" || echo "0")
+          echo ""
+          echo "=== Parsing SpotBugs reports ==="
+          for file in $(find . -name "spotbugsXml.xml" -type f); do
+            echo "Processing: $file"
+            # Check file size
+            ls -lh "$file"
+
+            # Count bugs - use perl for more reliable matching
+            BUGS=$(perl -ne 'print if /<BugInstance[^>]*>/' "$file" | wc -l | tr -d ' ')
+            echo "  Found $BUGS bug(s) in this file"
+
+            # Add to total (handle empty/non-numeric values)
+            if [ -n "$BUGS" ] && [ "$BUGS" -gt 0 ] 2>/dev/null; then
               TOTAL_BUGS=$((TOTAL_BUGS + BUGS))
-            done
-          fi
+            fi
+          done
 
+          echo ""
+          echo "=== Total bugs found: $TOTAL_BUGS ==="
           echo "total_bugs=$TOTAL_BUGS" >> $GITHUB_OUTPUT
 
           # Extract unique bug patterns
-          if [ $TOTAL_BUGS -gt 0 ]; then
-            echo "Bug patterns found:"
-            find . -name "spotbugsXml.xml" -type f -exec grep -h "type=" {} \; | \
-              sed 's/.*type="\([^"]*\)".*/\1/' | sort | uniq -c | sort -rn | head -10
+          if [ "$TOTAL_BUGS" -gt 0 ] 2>/dev/null; then
+            echo ""
+            echo "=== Bug patterns found ==="
+            find . -name "spotbugsXml.xml" -type f -exec perl -ne 'print "$1\n" if /type="([^"]+)"/' {} \; | \
+              sort | uniq -c | sort -rn | head -10
           fi
 
       - name: Convert SpotBugs to SARIF and create annotations
