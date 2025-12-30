@@ -5,6 +5,12 @@ spring:
     url: r2dbc:postgresql://localhost:5432/eventdb
     username: postgres
     password: password
+    pool:
+      initial-size: 10
+      max-size: 100
+      max-idle-time: 30m
+      max-acquire-time: 3s
+      max-create-connection-time: 3s
   sql:
     init:
       mode: never

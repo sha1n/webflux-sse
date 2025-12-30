@@ -144,19 +144,80 @@ mvn verify
 ```
 
 The demo script will:
-1. Start PostgreSQL and Elasticsearch in Docker
-2. Wait for services to be ready
-3. Start the Authorization Service (port 8082)
-4. Start the Search Service (port 8081)
-5. Display connection information
+1. Auto-detect your host IP and configure nginx for portability
+2. Start PostgreSQL, Elasticsearch, and Nginx in Docker
+3. Wait for services to be ready
+4. Start the Authorization Service (port 8082)
+5. Start the Search Service (port 8081)
+6. Display connection information
 
 ### Access the Application
 
-Once started, you can access:
-- **Search Service UI** (Events Dashboard): http://localhost:8081
-- **Search Service API Docs**: http://localhost:8081/swagger-ui.html
-- **Authorization Service UI** (Permissions Management): http://localhost:8082/permissions.html
-- **Authorization Service API Docs**: http://localhost:8082/swagger-ui.html
+Once started, you can access via **nginx reverse proxy** (port 80):
+- **Main Dashboard**: http://localhost
+- **Create Event**: http://localhost/create.html
+- **Bulk Create**: http://localhost/bulk-create.html
+- **Search (SSE)**: http://localhost/search-sse.html
+- **Permissions**: http://localhost/permissions.html
+- **Search Service API Docs**: http://localhost/search-docs/swagger-ui.html
+- **Authorization Service API Docs**: http://localhost/auth-docs/swagger-ui.html
+
+Or access services directly:
+- **Search Service**: http://localhost:8081
+- **Authorization Service**: http://localhost:8082
+
+---
+
+## Bulk Event Creation
+
+For testing and performance benchmarking, use the included bash script:
+
+```bash
+cd demo
+./bulk-create.sh 100  # Creates 100 events with random permissions for testing
+```
+
+This script creates N events with automatic permission assignment:
+- Events are named "event 1", "event 2", etc.
+- user1, user2, user3 each get random ~50% subset of events
+- admin gets permissions to all events
+
+---
+
+## Critical Nginx Configuration for Production
+
+The application uses nginx as a reverse proxy with **essential configurations** for reactive streaming:
+
+### Connection Pooling
+```nginx
+upstream authorization-service {
+    server DOCKER_HOST_IP:8082;
+    keepalive 64;  # Reuse connections
+}
+```
+Reduces TCP overhead and prevents connection exhaustion. [Reference](https://nginx.org/en/docs/http/ngx_http_upstream_module.html#keepalive)
+
+### Disable Response Buffering
+```nginx
+location /api/v1/permissions {
+    proxy_buffering off;  # Stream responses immediately
+    proxy_cache off;
+    proxy_set_header Connection '';
+}
+```
+
+**Why this is critical**: By default, nginx buffers entire responses before forwarding. With Spring WebFlux `Flux<T>` endpoints that stream unlimited results, this causes:
+- Memory accumulation in nginx buffers
+- Massive backpressure on reactive pipeline
+- **Complete system stalls** under load
+- Requests hang and timeout
+
+**Without `proxy_buffering off`**: Bulk operations and high concurrency will cause the system to **get stuck** as nginx attempts to buffer unbounded reactive streams into memory. Clients experience hanging requests that never complete.
+
+References:
+- [Nginx proxy_buffering](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_buffering)
+- [Avoiding Nginx configuration mistakes](https://www.nginx.com/blog/avoiding-top-10-nginx-configuration-mistakes/)
+- [Spring WebFlux through reverse proxies](https://docs.spring.io/spring-framework/reference/web/webflux/reactive-spring.html)
 
 ---
 
@@ -171,9 +232,9 @@ Follow these steps to see the application in action:
 Wait for all services to start (PostgreSQL, Elasticsearch, authorization-server, search-server).
 
 ### 2. Create Some Events
-Open http://localhost:8081 in your browser (blue-themed Search Service).
+Open http://localhost in your browser to see the main dashboard.
 
-Click "Create New Event" or navigate to http://localhost:8081/create.html
+Click "Create New Event" or navigate to http://localhost/create.html
 
 Create a few events:
 - "System Deployment" - "Production deployment completed"
@@ -181,12 +242,12 @@ Create a few events:
 - "Database Backup" - "Weekly backup completed successfully"
 
 ### 3. View Real-time Event Stream (SSE)
-Go back to http://localhost:8081 to see events streaming in real-time via **Server-Sent Events (SSE)**.
-The page updates automatically every 2 seconds with any new events.
+Go back to http://localhost to see events streaming in real-time via **Server-Sent Events (SSE)**.
+The page updates automatically as new events arrive.
 Open the browser DevTools Network tab to see the `text/event-stream` connection.
 
 ### 4. Grant Permissions
-Open http://localhost:8082/permissions.html (purple-themed Authorization Service).
+Open http://localhost/permissions.html (purple-themed Authorization Service).
 
 Grant permissions to users:
 - Click "+ Add Permission"
@@ -198,7 +259,7 @@ The modal closes immediately and you'll see a success message on the main page.
 The permissions table updates automatically showing which users can access which events.
 
 ### 5. Search with Permission Filtering (NDJSON)
-Navigate to http://localhost:8081/search.html
+Navigate to http://localhost/search.html
 
 - Enter a search query (e.g., "deployment")
 - Enter User ID: `user123`
@@ -212,7 +273,7 @@ Results stream in **NDJSON (Newline Delimited JSON)** format as they're found.
 Open the browser DevTools Network tab to see the `application/x-ndjson` response with one JSON object per line.
 
 ### 6. Search with Permission Filtering (SSE)
-Navigate to http://localhost:8081/search-sse.html
+Navigate to http://localhost/search-sse.html
 
 - Enter a search query (e.g., "deployment")
 - Enter User ID: `user123`
@@ -225,7 +286,7 @@ The SSE endpoint uses the native EventSource API, which provides automatic recon
 ### 7. Test Permission Filtering
 Try searching with a different user ID who has no permissions - you'll see no results even though events exist.
 
-Go back to the permissions page (http://localhost:8082/permissions.html) and grant permissions to the new user, then search again.
+Go back to the permissions page (http://localhost/permissions.html) and grant permissions to the new user, then search again.
 
 ### 8. Delete Individual Permissions
 On the permissions page, click the "×" button next to any event ID badge to remove that specific permission.

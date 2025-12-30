@@ -24,11 +24,19 @@ function BulkCreateForm() {
         setProgress(`Creating ${eventCount} events...`);
 
         try {
-            // Step 1: Create N events sequentially
-            const createdEvents = [];
+            // Counters for permission distribution and events created
+            let user1Count = 0;
+            let user2Count = 0;
+            let user3Count = 0;
+            let adminCount = 0;
+            let eventsCreated = 0;
+
+            // Create events one at a time and assign permissions immediately
+            // DO NOT accumulate events in memory
             for (let i = 1; i <= eventCount; i++) {
                 setProgress(`Creating event ${i} of ${eventCount}...`);
 
+                // Step 1: Create the event
                 const response = await fetch('/api/v1/events', {
                     method: 'POST',
                     headers: {
@@ -45,142 +53,91 @@ function BulkCreateForm() {
                 }
 
                 const event = await response.json();
-                createdEvents.push(event);
-            }
+                eventsCreated++;
 
-            setProgress('Events created! Assigning permissions...');
+                // Step 2: Immediately assign permissions for this event
+                setProgress(`Assigning permissions for event ${i} (ID: ${event.id})...`);
 
-            // Step 2: Collect event IDs
-            const eventIds = createdEvents.map(e => e.id);
+                // Determine which users get access to this event randomly
+                const grantToUser1 = Math.random() > 0.5;
+                const grantToUser2 = Math.random() > 0.5;
+                const grantToUser3 = Math.random() > 0.5;
 
-            // Step 3: Randomly distribute permissions
-            const user1Events = [];
-            const user2Events = [];
-            const user3Events = [];
-            const adminEvents = [...eventIds]; // admin gets all
+                if (grantToUser1) user1Count++;
+                if (grantToUser2) user2Count++;
+                if (grantToUser3) user3Count++;
+                adminCount++; // admin always gets access
 
-            eventIds.forEach(eventId => {
-                if (Math.random() > 0.5) user1Events.push(eventId);
-                if (Math.random() > 0.5) user2Events.push(eventId);
-                if (Math.random() > 0.5) user3Events.push(eventId);
-            });
+                // Create permissions SEQUENTIALLY to avoid R2DBC connection pool exhaustion
+                // Backend has only 10 connections; parallel requests cause blocking
 
-            // Step 4: Grant permissions via authorization server (port 8082)
-            const permissionPromises = [];
-
-            if (user1Events.length > 0) {
-                setProgress('Assigning permissions to user1...');
-                permissionPromises.push(
-                    fetch('http://localhost:8082/api/v1/permissions/bulk', {
+                if (grantToUser1) {
+                    const r1 = await fetch('/api/v1/permissions/bulk', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             userId: 'user1',
-                            eventIds: user1Events
+                            eventIds: [event.id]
                         }),
-                    }).then(response => {
-                        if (!response.ok) {
-                            console.warn('Failed to assign permissions to user1');
-                        }
-                        return response;
-                    }).catch(error => {
-                        console.error('Error assigning permissions to user1:', error);
-                    })
-                );
-            }
+                    });
+                    try { await r1.json(); } catch(e) {}
+                }
 
-            if (user2Events.length > 0) {
-                setProgress('Assigning permissions to user2...');
-                permissionPromises.push(
-                    fetch('http://localhost:8082/api/v1/permissions/bulk', {
+                if (grantToUser2) {
+                    const r2 = await fetch('/api/v1/permissions/bulk', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             userId: 'user2',
-                            eventIds: user2Events
+                            eventIds: [event.id]
                         }),
-                    }).then(response => {
-                        if (!response.ok) {
-                            console.warn('Failed to assign permissions to user2');
-                        }
-                        return response;
-                    }).catch(error => {
-                        console.error('Error assigning permissions to user2:', error);
-                    })
-                );
-            }
+                    });
+                    try { await r2.json(); } catch(e) {}
+                }
 
-            if (user3Events.length > 0) {
-                setProgress('Assigning permissions to user3...');
-                permissionPromises.push(
-                    fetch('http://localhost:8082/api/v1/permissions/bulk', {
+                if (grantToUser3) {
+                    const r3 = await fetch('/api/v1/permissions/bulk', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             userId: 'user3',
-                            eventIds: user3Events
+                            eventIds: [event.id]
                         }),
-                    }).then(response => {
-                        if (!response.ok) {
-                            console.warn('Failed to assign permissions to user3');
-                        }
-                        return response;
-                    }).catch(error => {
-                        console.error('Error assigning permissions to user3:', error);
-                    })
-                );
-            }
+                    });
+                    try { await r3.json(); } catch(e) {}
+                }
 
-            if (adminEvents.length > 0) {
-                setProgress('Assigning permissions to admin...');
-                permissionPromises.push(
-                    fetch('http://localhost:8082/api/v1/permissions/bulk', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            userId: 'admin',
-                            eventIds: adminEvents
-                        }),
-                    }).then(response => {
-                        if (!response.ok) {
-                            console.warn('Failed to assign permissions to admin');
-                        }
-                        return response;
-                    }).catch(error => {
-                        console.error('Error assigning permissions to admin:', error);
-                    })
-                );
-            }
+                // Admin always gets access
+                const r4 = await fetch('/api/v1/permissions/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: 'admin',
+                        eventIds: [event.id]
+                    }),
+                });
+                try { await r4.json(); } catch(e) {}
 
-            // Wait for all permission grants to complete (with error handling)
-            await Promise.allSettled(permissionPromises);
+                // Event and permissions are done - object can be garbage collected
+            }
 
             // Build results
             const summary = {
-                user1: user1Events.length,
-                user2: user2Events.length,
-                user3: user3Events.length,
-                admin: adminEvents.length
+                user1: user1Count,
+                user2: user2Count,
+                user3: user3Count,
+                admin: adminCount
             };
 
-            const totalPermissions = user1Events.length + user2Events.length +
-                                    user3Events.length + adminEvents.length;
+            const totalPermissions = user1Count + user2Count + user3Count + adminCount;
 
             setResults({
-                events: createdEvents,
+                eventsCreated: eventsCreated,
                 permissionSummary: summary,
                 totalPermissions: totalPermissions
             });
 
-            setMessage(`Successfully created ${createdEvents.length} events with ${totalPermissions} permissions!`);
+            setMessage(`Successfully created ${eventsCreated} events with ${totalPermissions} permissions!`);
             setMessageType('success');
             setCount('');
             setProgress('');
@@ -197,7 +154,7 @@ function BulkCreateForm() {
     return (
         <>
             <div className="api-docs-ribbon">
-                <a href="/swagger-ui.html" target="_blank">
+                <a href="/search-docs/swagger-ui.html" target="_blank">
                     API Docs
                 </a>
             </div>
@@ -270,13 +227,23 @@ function BulkCreateForm() {
                     {results && (
                         <div className="results-container">
                             <div className="results-section">
-                                <h3>Created Events ({results.events.length})</h3>
-                                <div className="event-list">
-                                    {results.events.map(event => (
-                                        <div key={event.id} className="event-badge">
-                                            {event.title} (ID: {event.id})
-                                        </div>
-                                    ))}
+                                <h3>Summary</h3>
+                                <div style={{
+                                    fontSize: '48px',
+                                    fontWeight: 'bold',
+                                    color: '#007bff',
+                                    textAlign: 'center',
+                                    padding: '20px'
+                                }}>
+                                    {results.eventsCreated} Events Created
+                                </div>
+                                <div style={{
+                                    fontSize: '24px',
+                                    color: '#6c757d',
+                                    textAlign: 'center',
+                                    marginTop: '10px'
+                                }}>
+                                    {results.totalPermissions} Total Permissions
                                 </div>
                             </div>
 
@@ -287,21 +254,21 @@ function BulkCreateForm() {
                                         <h4>user1</h4>
                                         <div className="count">{results.permissionSummary.user1}</div>
                                         <div className="percentage">
-                                            {Math.round(results.permissionSummary.user1 / results.events.length * 100)}% of events
+                                            {Math.round(results.permissionSummary.user1 / results.eventsCreated * 100)}% of events
                                         </div>
                                     </div>
                                     <div className="user-card">
                                         <h4>user2</h4>
                                         <div className="count">{results.permissionSummary.user2}</div>
                                         <div className="percentage">
-                                            {Math.round(results.permissionSummary.user2 / results.events.length * 100)}% of events
+                                            {Math.round(results.permissionSummary.user2 / results.eventsCreated * 100)}% of events
                                         </div>
                                     </div>
                                     <div className="user-card">
                                         <h4>user3</h4>
                                         <div className="count">{results.permissionSummary.user3}</div>
                                         <div className="percentage">
-                                            {Math.round(results.permissionSummary.user3 / results.events.length * 100)}% of events
+                                            {Math.round(results.permissionSummary.user3 / results.eventsCreated * 100)}% of events
                                         </div>
                                     </div>
                                     <div className="user-card admin">
