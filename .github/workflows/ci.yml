@@ -39,6 +39,14 @@ jobs:
           # Generate SpotBugs XML reports for all modules
           mvn spotbugs:spotbugs --batch-mode -DskipTests=true || true
 
+          # Clean ANSI color codes from XML files (they corrupt the XML)
+          find . -name "spotbugsXml.xml" -type f -exec sh -c '
+            for file; do
+              # Remove ANSI escape codes using sed
+              LC_ALL=C sed "s/$(printf "\033")\[[0-9;]*[mK]//g" "$file" > "$file.clean" && mv "$file.clean" "$file"
+            done
+          ' sh {} +
+
           # Find all SpotBugs XML reports
           find . -name "spotbugsXml.xml" -type f
 
@@ -487,6 +495,146 @@ jobs:
                 body: comment
               });
             }
+
+      - name: Generate Job Summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            const spotbugsBugs = '${{ steps.spotbugs.outputs.total_bugs }}' || '0';
+            const spotlessFormatted = '${{ steps.spotless.outputs.formatted }}' === 'true';
+            const totalTests = '${{ steps.tests.outputs.total }}' || '0';
+            const failedTests = '${{ steps.tests.outputs.failed }}' || '0';
+            const errorTests = '${{ steps.tests.outputs.errors }}' || '0';
+            const mavenExitCode = '${{ steps.maven-verify.outputs.exit_code }}' || '0';
+
+            const passedTests = parseInt(totalTests) - parseInt(failedTests) - parseInt(errorTests);
+            const testsPassed = parseInt(failedTests) === 0 && parseInt(errorTests) === 0;
+            const buildPassed = mavenExitCode === '0';
+
+            // Determine overall status
+            let overallStatus = '✅ PASSED';
+            let overallEmoji = '✅';
+            if (!buildPassed || !testsPassed || !spotlessFormatted || parseInt(spotbugsBugs) > 0) {
+              overallStatus = '❌ FAILED';
+              overallEmoji = '❌';
+            }
+
+            // Build the job summary with markdown
+            let summary = `# ${overallEmoji} CI Report\n\n`;
+            summary += `## Overall Status: ${overallStatus}\n\n`;
+            summary += `---\n\n`;
+
+            // Create status table
+            summary += `## 📊 Summary\n\n`;
+            summary += `| Check | Status | Details |\n`;
+            summary += `|-------|--------|----------|\n`;
+            summary += `| 🏗️ Build | ${buildPassed ? '✅ Passed' : '❌ Failed'} | Maven verify |\n`;
+            summary += `| 🐛 SpotBugs | ${parseInt(spotbugsBugs) === 0 ? '✅ Passed' : '⚠️ Issues Found'} | ${spotbugsBugs} bug(s) |\n`;
+            summary += `| 💅 Code Format | ${spotlessFormatted ? '✅ Passed' : '❌ Failed'} | Google Java Format |\n`;
+            summary += `| 🧪 Tests | ${testsPassed ? '✅ Passed' : '❌ Failed'} | ${passedTests}/${totalTests} passed |\n\n`;
+
+            // SpotBugs detailed breakdown
+            summary += `## 🐛 SpotBugs Analysis\n\n`;
+            if (parseInt(spotbugsBugs) === 0) {
+              summary += `✅ **No bugs found!**\n\n`;
+            } else {
+              summary += `⚠️ **Found ${spotbugsBugs} potential bug(s)**\n\n`;
+
+              // Try to get bug patterns breakdown
+              const spotbugsFiles = [];
+              try {
+                const { execSync } = require('child_process');
+                const output = execSync('find . -name "spotbugsXml.xml" -type f').toString().trim();
+                if (output) {
+                  spotbugsFiles.push(...output.split('\n'));
+                }
+              } catch (error) {
+                console.log('Could not find SpotBugs files');
+              }
+
+              if (spotbugsFiles.length > 0) {
+                const bugPatterns = {};
+                const bugPriorities = { '1': 0, '2': 0, '3': 0 };
+
+                for (const file of spotbugsFiles) {
+                  try {
+                    const xml = fs.readFileSync(file, 'utf8');
+                    const bugPattern = /<BugInstance[^>]*type="([^"]*)"[^>]*priority="([^"]*)"[^>]*>/g;
+                    let match;
+
+                    while ((match = bugPattern.exec(xml)) !== null) {
+                      const type = match[1];
+                      const priority = match[2];
+                      bugPatterns[type] = (bugPatterns[type] || 0) + 1;
+                      bugPriorities[priority] = (bugPriorities[priority] || 0) + 1;
+                    }
+                  } catch (error) {
+                    console.log(`Could not read ${file}`);
+                  }
+                }
+
+                // Show priority breakdown
+                summary += `### Severity Breakdown\n\n`;
+                summary += `| Priority | Count | Description |\n`;
+                summary += `|----------|-------|-------------|\n`;
+                summary += `| 🔴 High (P1) | ${bugPriorities['1']} | Most important bugs |\n`;
+                summary += `| 🟡 Medium (P2) | ${bugPriorities['2']} | Moderate issues |\n`;
+                summary += `| 🔵 Low (P3) | ${bugPriorities['3']} | Minor concerns |\n\n`;
+
+                // Show top bug patterns
+                const sortedPatterns = Object.entries(bugPatterns).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                if (sortedPatterns.length > 0) {
+                  summary += `### Top Bug Patterns\n\n`;
+                  summary += `| Pattern | Count |\n`;
+                  summary += `|---------|-------|\n`;
+                  for (const [pattern, count] of sortedPatterns) {
+                    summary += `| \`${pattern}\` | ${count} |\n`;
+                  }
+                  summary += `\n`;
+                }
+              }
+
+              summary += `> 💡 Run \`mvn spotbugs:gui\` locally to view detailed reports\n\n`;
+            }
+
+            // Spotless formatting
+            summary += `## 💅 Code Formatting\n\n`;
+            if (spotlessFormatted) {
+              summary += `✅ **All code is properly formatted** (Google Java Format)\n\n`;
+            } else {
+              summary += `❌ **Code formatting issues detected**\n\n`;
+              summary += `> 💡 Run \`mvn spotless:apply\` to automatically fix formatting issues\n\n`;
+            }
+
+            // Test results
+            summary += `## 🧪 Test Results\n\n`;
+            if (parseInt(totalTests) === 0) {
+              summary += `⚠️ **No tests found**\n\n`;
+            } else if (testsPassed) {
+              summary += `✅ **All tests passed!**\n\n`;
+              summary += `📈 **${totalTests}** tests executed successfully\n\n`;
+            } else {
+              summary += `❌ **Some tests failed**\n\n`;
+              summary += `| Status | Count |\n`;
+              summary += `|--------|-------|\n`;
+              summary += `| ✅ Passed | ${passedTests} |\n`;
+              summary += `| ❌ Failed | ${failedTests} |\n`;
+              summary += `| 💥 Errors | ${errorTests} |\n`;
+              summary += `| 📊 Total | ${totalTests} |\n\n`;
+            }
+
+            // Footer
+            summary += `---\n\n`;
+            summary += `💡 **Tip:** Check the "Files changed" tab in the PR to see inline annotations on specific lines of code.\n\n`;
+            summary += `🔗 **PR:** #${{ github.event.pull_request.number }}\n`;
+            summary += `📝 **Commit:** ${{ github.event.pull_request.head.sha }}\n`;
+
+            // Write to job summary
+            fs.writeFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
 
       - name: Fail if quality checks failed
         if: steps.maven-verify.outputs.exit_code != '0'
