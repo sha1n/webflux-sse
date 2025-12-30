@@ -74,6 +74,7 @@ function CreateEventForm() {
                 <div className="nav">
                     <a href="/">Dashboard</a>
                     <span className="current">+ Create Event</span>
+                    <a href="/bulk-create.html">Bulk Create</a>
                     <a href="/search.html">Search (Stream)</a>
                     <a href="/search-sse.html">Search (SSE)</a>
                     <a href="/permissions.html">Permissions</a>

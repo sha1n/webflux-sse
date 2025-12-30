@@ -33,11 +33,15 @@ else
     # Backup first
     cp "$NGINX_DIR/nginx.conf" "$NGINX_DIR/nginx.conf.bak"
 
-    # Replace any existing IP addresses in the upstream blocks
+    # Replace DOCKER_HOST_IP placeholder or any existing IP addresses in the upstream blocks
     if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s/server DOCKER_HOST_IP:8081;/server $HOST_IP:8081;/" "$NGINX_DIR/nginx.conf"
+        sed -i '' "s/server DOCKER_HOST_IP:8082;/server $HOST_IP:8082;/" "$NGINX_DIR/nginx.conf"
         sed -i '' "s/server [0-9.]*:8081;/server $HOST_IP:8081;/" "$NGINX_DIR/nginx.conf"
         sed -i '' "s/server [0-9.]*:8082;/server $HOST_IP:8082;/" "$NGINX_DIR/nginx.conf"
     else
+        sed -i "s/server DOCKER_HOST_IP:8081;/server $HOST_IP:8081;/" "$NGINX_DIR/nginx.conf"
+        sed -i "s/server DOCKER_HOST_IP:8082;/server $HOST_IP:8082;/" "$NGINX_DIR/nginx.conf"
         sed -i "s/server [0-9.]*:8081;/server $HOST_IP:8081;/" "$NGINX_DIR/nginx.conf"
         sed -i "s/server [0-9.]*:8082;/server $HOST_IP:8082;/" "$NGINX_DIR/nginx.conf"
     fi

@@ -223,6 +223,7 @@ public class PermissionController {
             request.eventIds(), request.userId());
 
         return Flux.fromIterable(request.eventIds())
+                .doOnSubscribe(sub -> log.info("Subscribed to bulk permission grant for userId={}", request.userId()))
                 .map(eventId -> new UserEventPermissionEntity(eventId, request.userId()))
                 .flatMap(entity ->
                     permissionRepository.save(entity)
@@ -231,10 +232,13 @@ public class PermissionController {
                             log.warn("Permission already exists for eventId={}, userId={}, skipping",
                                 entity.getEventId(), entity.getUserId());
                             return Mono.empty(); // Skip duplicate permissions
-                        })
+                        }),
+                    100  // Limit to 100 concurrent database operations
                 )
                 .doOnNext(savedPermission -> log.info("Successfully granted permission with id={}", savedPermission.id()))
-                .doOnComplete(() -> log.info("Completed bulk permission grant for userId={}", request.userId()));
+                .doOnComplete(() -> log.info("Completed bulk permission grant for userId={}", request.userId()))
+                .doOnCancel(() -> log.warn("CANCELLED bulk permission grant for userId={}", request.userId()))
+                .doOnError(error -> log.error("ERROR in bulk permission grant for userId={}: {}", request.userId(), error.getMessage()));
     }
 
     public record GrantPermissionRequest(

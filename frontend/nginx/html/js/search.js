@@ -104,6 +104,7 @@ function SearchApp() {
                 <div className="nav">
                     <a href="/">Dashboard</a>
                     <a href="/create.html" className="primary">+ Create Event</a>
+                    <a href="/bulk-create.html">Bulk Create</a>
                     <span className="current">Search (Stream)</span>
                     <a href="/search-sse.html">Search (SSE)</a>
                     <a href="/permissions.html">Permissions</a>

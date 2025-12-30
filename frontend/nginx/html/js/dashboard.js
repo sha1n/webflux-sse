@@ -3,6 +3,7 @@ const { useState, useEffect } = React;
 function EventDashboard() {
     const [events, setEvents] = useState([]);
     const [connectionStatus, setConnectionStatus] = useState('connecting');
+    const [lastUpdateTime, setLastUpdateTime] = useState(null);
 
     useEffect(() => {
         const eventSource = new EventSource('/api/v1/events');
@@ -52,6 +53,7 @@ function EventDashboard() {
 
                 batchTimeout = setTimeout(() => {
                     setEvents(currentBatch.slice(0, 100));
+                    setLastUpdateTime(new Date());
                     currentBatch = [];
                 }, 100);
 
@@ -112,11 +114,22 @@ function EventDashboard() {
                         {connectionStatus === 'connecting' && ' ● Connecting...'}
                         {connectionStatus === 'disconnected' && ' ● Disconnected'}
                     </span>
-                    {events.length > 0 && <span> | Events: {events.length}</span>}
+                    {events.length > 0 && (
+                        <span>
+                            {' | '}
+                            Showing {events.length} most recent event{events.length !== 1 ? 's' : ''}
+                            {lastUpdateTime && (
+                                <span style={{ marginLeft: '8px', color: '#666' }}>
+                                    • Updated: {lastUpdateTime.toLocaleTimeString()}
+                                </span>
+                            )}
+                        </span>
+                    )}
                 </div>
                 <div className="nav">
                     <span className="current">Dashboard</span>
                     <a href="/create.html" className="primary">+ Create Event</a>
+                    <a href="/bulk-create.html">Bulk Create</a>
                     <a href="/search.html">Search (Stream)</a>
                     <a href="/search-sse.html">Search (SSE)</a>
                     <a href="/permissions.html">Permissions</a>
