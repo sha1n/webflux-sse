@@ -1,0 +1,668 @@
+name: CI
+
+on:
+  pull_request:
+    branches: ['**']
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+  checks: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run Maven verify (includes SpotBugs and Spotless)
+        id: maven-verify
+        run: |
+          # Run verify and capture result
+          mvn verify --batch-mode --update-snapshots -DskipTests=false 2>&1 | tee maven-output.log
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Generate SpotBugs reports
+        if: always()
+        run: |
+          # Generate SpotBugs XML reports for all modules
+          # Use --fail-at-end to match local builds - ensures all modules are analyzed
+          mvn spotbugs:spotbugs --batch-mode --fail-at-end -DskipTests=true || true
+
+          echo "=== Cleaning ANSI codes from XML files ==="
+          # Clean ANSI color codes from XML files (they corrupt the XML)
+          for file in $(find . -name "spotbugsXml.xml" -type f); do
+            echo "Cleaning: $file"
+            # Show file size before
+            ls -lh "$file"
+
+            # Remove ANSI escape codes using perl (more portable)
+            perl -pe 's/\x1b\[[0-9;]*[mK]//g' "$file" > "$file.clean"
+            mv "$file.clean" "$file"
+
+            # Show first occurrence of BugInstance to verify
+            echo "First BugInstance tag:"
+            grep -m 1 "BugInstance" "$file" | head -c 200 || echo "  (none found)"
+            echo ""
+          done
+
+          echo ""
+          echo "=== SpotBugs XML reports ==="
+          find . -name "spotbugsXml.xml" -type f
+
+      - name: Parse SpotBugs results
+        if: always()
+        id: spotbugs
+        run: |
+          # Count total bugs across all modules
+          TOTAL_BUGS=0
+          echo "=== Searching for SpotBugs XML files ==="
+          find . -name "spotbugsXml.xml" -type f
+
+          echo ""
+          echo "=== Parsing SpotBugs reports ==="
+          for file in $(find . -name "spotbugsXml.xml" -type f); do
+            echo "Processing: $file"
+            # Check file size
+            ls -lh "$file"
+
+            # Count bugs - use perl for more reliable matching
+            BUGS=$(perl -ne 'print if /<BugInstance[^>]*>/' "$file" | wc -l | tr -d ' ')
+            echo "  Found $BUGS bug(s) in this file"
+
+            # Add to total (handle empty/non-numeric values)
+            if [ -n "$BUGS" ] && [ "$BUGS" -gt 0 ] 2>/dev/null; then
+              TOTAL_BUGS=$((TOTAL_BUGS + BUGS))
+            fi
+          done
+
+          echo ""
+          echo "=== Total bugs found: $TOTAL_BUGS ==="
+          echo "total_bugs=$TOTAL_BUGS" >> $GITHUB_OUTPUT
+
+          # Extract unique bug patterns
+          if [ "$TOTAL_BUGS" -gt 0 ] 2>/dev/null; then
+            echo ""
+            echo "=== Bug patterns found ==="
+            find . -name "spotbugsXml.xml" -type f -exec perl -ne 'print "$1\n" if /type="([^"]+)"/' {} \; | \
+              sort | uniq -c | sort -rn | head -10
+          fi
+
+      - name: Convert SpotBugs to SARIF and create annotations
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { execSync } = require('child_process');
+
+            // Find all SpotBugs XML files
+            const findCommand = 'find . -name "spotbugsXml.xml" -type f';
+            let spotbugsFiles = [];
+            try {
+              const output = execSync(findCommand).toString().trim();
+              spotbugsFiles = output ? output.split('\n') : [];
+            } catch (error) {
+              console.log('No SpotBugs files found');
+              return;
+            }
+
+            const annotations = [];
+
+            // Parse each SpotBugs XML file
+            for (const filePath of spotbugsFiles) {
+              console.log(`Processing ${filePath}`);
+              const xml = fs.readFileSync(filePath, 'utf8');
+
+              // Extract BugInstance elements using regex
+              const bugPattern = /<BugInstance[^>]*type="([^"]*)"[^>]*priority="([^"]*)"[^>]*>(.*?)<\/BugInstance>/gs;
+              let match;
+
+              while ((match = bugPattern.exec(xml)) !== null) {
+                const bugType = match[1];
+                const priority = match[2];
+                const bugContent = match[3];
+
+                // Extract source line information
+                const sourceLineMatch = /<SourceLine[^>]*classname="([^"]*)"[^>]*start="([^"]*)"[^>]*end="([^"]*)"[^>]*sourcepath="([^"]*)"[^>]*>/s.exec(bugContent);
+                const shortMessageMatch = /<ShortMessage>(.*?)<\/ShortMessage>/s.exec(bugContent);
+                const longMessageMatch = /<LongMessage>(.*?)<\/LongMessage>/s.exec(bugContent);
+
+                if (sourceLineMatch && shortMessageMatch) {
+                  const className = sourceLineMatch[1];
+                  const startLine = parseInt(sourceLineMatch[2]);
+                  const endLine = parseInt(sourceLineMatch[3]);
+                  const sourcePath = sourceLineMatch[4];
+                  const shortMessage = shortMessageMatch[1];
+                  const longMessage = longMessageMatch ? longMessageMatch[1] : shortMessage;
+
+                  // Determine severity
+                  const level = priority === '1' ? 'error' : priority === '2' ? 'warning' : 'notice';
+
+                  // Find the actual file path
+                  const possiblePaths = [
+                    `backend/search/search-server/src/main/java/${sourcePath}`,
+                    `backend/authorization/authorization-server/src/main/java/${sourcePath}`,
+                    `backend/search/search-service-api/src/main/java/${sourcePath}`,
+                    `backend/authorization/authorization-service-api/src/main/java/${sourcePath}`
+                  ];
+
+                  let actualPath = null;
+                  for (const p of possiblePaths) {
+                    if (fs.existsSync(p)) {
+                      actualPath = p;
+                      break;
+                    }
+                  }
+
+                  if (actualPath) {
+                    annotations.push({
+                      path: actualPath,
+                      start_line: startLine,
+                      end_line: endLine,
+                      annotation_level: level,
+                      message: `[${bugType}] ${longMessage}`,
+                      title: `SpotBugs: ${bugType}`
+                    });
+                  }
+                }
+              }
+            }
+
+            if (annotations.length > 0) {
+              console.log(`Creating ${annotations.length} SpotBugs annotations`);
+
+              // GitHub API only allows 50 annotations per check run
+              const displayAnnotations = annotations.slice(0, 50);
+              const hasMore = annotations.length > 50;
+
+              let summary = `Found ${annotations.length} potential bug(s)`;
+              if (hasMore) {
+                summary += ` (showing first 50 inline annotations, run \`mvn spotbugs:gui\` locally to view all)`;
+              }
+
+              await github.rest.checks.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'SpotBugs Analysis',
+                head_sha: context.payload.pull_request.head.sha,
+                status: 'completed',
+                conclusion: annotations.length > 0 ? 'neutral' : 'success',
+                output: {
+                  title: 'SpotBugs Analysis Results',
+                  summary: summary,
+                  annotations: displayAnnotations
+                }
+              });
+            } else {
+              console.log('No SpotBugs issues to annotate');
+            }
+
+      - name: Check Spotless formatting
+        if: always()
+        id: spotless
+        run: |
+          # Check if code is formatted correctly
+          mvn spotless:check --batch-mode -DskipTests=true > spotless-output.log 2>&1 || true
+
+          if grep -q "BUILD FAILURE" spotless-output.log; then
+            echo "formatted=false" >> $GITHUB_OUTPUT
+            echo "Spotless formatting issues found"
+            cat spotless-output.log
+          else
+            echo "formatted=true" >> $GITHUB_OUTPUT
+            echo "Code is properly formatted"
+          fi
+
+      - name: Create Spotless annotations
+        if: always() && steps.spotless.outputs.formatted == 'false'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            // Read the spotless output
+            let output = '';
+            try {
+              output = fs.readFileSync('spotless-output.log', 'utf8');
+            } catch (error) {
+              console.log('No spotless output found');
+              return;
+            }
+
+            const annotations = [];
+
+            // Parse Spotless output for formatting violations
+            // Example line: "[ERROR] src/main/java/com/example/Foo.java"
+            const filePattern = /\[ERROR\]\s+([^\s]+\.java)/g;
+            let match;
+
+            while ((match = filePattern.exec(output)) !== null) {
+              const filePath = match[1];
+
+              // Check if file exists
+              if (fs.existsSync(filePath)) {
+                annotations.push({
+                  path: filePath,
+                  start_line: 1,
+                  end_line: 1,
+                  annotation_level: 'warning',
+                  message: 'Code formatting does not match Google Java Format style. Run `mvn spotless:apply` to fix.',
+                  title: 'Spotless: Formatting violation'
+                });
+              }
+            }
+
+            if (annotations.length > 0) {
+              console.log(`Creating ${annotations.length} Spotless annotations`);
+
+              await github.rest.checks.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'Spotless Formatting',
+                head_sha: context.payload.pull_request.head.sha,
+                status: 'completed',
+                conclusion: 'neutral',
+                output: {
+                  title: 'Spotless Formatting Issues',
+                  summary: `Found ${annotations.length} file(s) with formatting issues. Run \`mvn spotless:apply\` to fix.`,
+                  annotations: annotations.slice(0, 50) // GitHub limits to 50 annotations
+                }
+              });
+            }
+
+      - name: Run tests with coverage
+        if: always()
+        id: tests
+        run: |
+          mvn test --batch-mode -Dmaven.test.failure.ignore=true
+
+          # Count test results
+          TOTAL_TESTS=$(find . -name "TEST-*.xml" -type f -exec grep -h "tests=" {} \; | \
+            sed 's/.*tests="\([0-9]*\)".*/\1/' | awk '{s+=$1} END {print s}')
+          FAILED_TESTS=$(find . -name "TEST-*.xml" -type f -exec grep -h "failures=" {} \; | \
+            sed 's/.*failures="\([0-9]*\)".*/\1/' | awk '{s+=$1} END {print s}')
+          ERROR_TESTS=$(find . -name "TEST-*.xml" -type f -exec grep -h "errors=" {} \; | \
+            sed 's/.*errors="\([0-9]*\)".*/\1/' | awk '{s+=$1} END {print s}')
+
+          echo "total=${TOTAL_TESTS:-0}" >> $GITHUB_OUTPUT
+          echo "failed=${FAILED_TESTS:-0}" >> $GITHUB_OUTPUT
+          echo "errors=${ERROR_TESTS:-0}" >> $GITHUB_OUTPUT
+
+      - name: Create test failure annotations
+        if: always() && (steps.tests.outputs.failed != '0' || steps.tests.outputs.errors != '0')
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { execSync } = require('child_process');
+
+            // Find all JUnit XML test reports
+            const findCommand = 'find . -name "TEST-*.xml" -type f';
+            let testFiles = [];
+            try {
+              const output = execSync(findCommand).toString().trim();
+              testFiles = output ? output.split('\n') : [];
+            } catch (error) {
+              console.log('No test files found');
+              return;
+            }
+
+            const annotations = [];
+
+            // Parse each test file
+            for (const testFile of testFiles) {
+              console.log(`Processing ${testFile}`);
+              const xml = fs.readFileSync(testFile, 'utf8');
+
+              // Extract test failures and errors
+              const failurePattern = /<testcase[^>]*name="([^"]*)"[^>]*classname="([^"]*)"[^>]*>[\s\S]*?<(failure|error)[^>]*message="([^"]*)"[^>]*>([\s\S]*?)<\/\3>/g;
+              let match;
+
+              while ((match = failurePattern.exec(xml)) !== null) {
+                const testName = match[1];
+                const className = match[2];
+                const failureType = match[3]; // 'failure' or 'error'
+                const message = match[4];
+                const stackTrace = match[5];
+
+                // Extract file path from class name
+                const classPath = className.replace(/\./g, '/') + '.java';
+
+                // Try to find the actual file
+                const possiblePaths = [
+                  `backend/search/search-server/src/test/java/${classPath}`,
+                  `backend/authorization/authorization-server/src/test/java/${classPath}`,
+                  `backend/search/search-service-api/src/test/java/${classPath}`,
+                  `backend/authorization/authorization-service-api/src/test/java/${classPath}`
+                ];
+
+                let actualPath = null;
+                let lineNumber = 1;
+
+                for (const p of possiblePaths) {
+                  if (fs.existsSync(p)) {
+                    actualPath = p;
+
+                    // Try to find the line number of the test method
+                    try {
+                      const fileContent = fs.readFileSync(p, 'utf8');
+                      const lines = fileContent.split('\n');
+                      for (let i = 0; i < lines.length; i++) {
+                        if (lines[i].includes(`void ${testName}(`) || lines[i].includes(`void ${testName} (`)) {
+                          lineNumber = i + 1;
+                          break;
+                        }
+                      }
+                    } catch (error) {
+                      console.log(`Could not read file ${p}`);
+                    }
+                    break;
+                  }
+                }
+
+                if (actualPath) {
+                  // Extract first line of stack trace for better error message
+                  const stackLines = stackTrace.trim().split('\n');
+                  const firstStackLine = stackLines[0] || message;
+
+                  annotations.push({
+                    path: actualPath,
+                    start_line: lineNumber,
+                    end_line: lineNumber,
+                    annotation_level: failureType === 'error' ? 'failure' : 'warning',
+                    message: `Test ${failureType}: ${message}\n\n${firstStackLine}`,
+                    title: `Test ${failureType}: ${testName}`
+                  });
+                }
+              }
+            }
+
+            if (annotations.length > 0) {
+              console.log(`Creating ${annotations.length} test failure annotations`);
+
+              // GitHub API only allows 50 annotations per check run
+              const displayAnnotations = annotations.slice(0, 50);
+              const hasMore = annotations.length > 50;
+
+              let summary = `Found ${annotations.length} test failure(s)`;
+              if (hasMore) {
+                summary += ` (showing first 50 inline annotations)`;
+              }
+
+              await github.rest.checks.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'Test Results',
+                head_sha: context.payload.pull_request.head.sha,
+                status: 'completed',
+                conclusion: 'neutral',
+                output: {
+                  title: 'Test Failures',
+                  summary: summary,
+                  annotations: displayAnnotations
+                }
+              });
+            } else {
+              console.log('No test failures to annotate');
+            }
+
+      - name: Generate PR Comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            const spotbugsBugs = '${{ steps.spotbugs.outputs.total_bugs }}' || '0';
+            const spotlessFormatted = '${{ steps.spotless.outputs.formatted }}' === 'true';
+            const totalTests = '${{ steps.tests.outputs.total }}' || '0';
+            const failedTests = '${{ steps.tests.outputs.failed }}' || '0';
+            const errorTests = '${{ steps.tests.outputs.errors }}' || '0';
+            const mavenExitCode = '${{ steps.maven-verify.outputs.exit_code }}' || '0';
+
+            const passedTests = parseInt(totalTests) - parseInt(failedTests) - parseInt(errorTests);
+            const testsPassed = parseInt(failedTests) === 0 && parseInt(errorTests) === 0;
+            const buildPassed = mavenExitCode === '0';
+
+            // Determine overall status
+            let overallStatus = '✅ PASSED';
+            if (!buildPassed || !testsPassed || !spotlessFormatted || parseInt(spotbugsBugs) > 0) {
+              overallStatus = '❌ FAILED';
+            }
+
+            // Build the comment
+            let comment = `## CI Report\n\n`;
+            comment += `**Overall Status:** ${overallStatus}\n\n`;
+            comment += `---\n\n`;
+
+            // Build status
+            comment += `### 🏗️ Build\n`;
+            comment += buildPassed ? `✅ Build successful\n\n` : `❌ Build failed\n\n`;
+
+            // SpotBugs results
+            comment += `### 🐛 SpotBugs Analysis\n`;
+            if (parseInt(spotbugsBugs) === 0) {
+              comment += `✅ No bugs found\n\n`;
+            } else {
+              comment += `❌ Found ${spotbugsBugs} potential bug(s)\n\n`;
+              comment += `<details><summary>View details</summary>\n\n`;
+              comment += `Run \`mvn spotbugs:gui\` locally to view detailed reports.\n\n`;
+              comment += `</details>\n\n`;
+            }
+
+            // Spotless formatting
+            comment += `### 💅 Code Formatting (Spotless)\n`;
+            if (spotlessFormatted) {
+              comment += `✅ Code is properly formatted\n\n`;
+            } else {
+              comment += `❌ Code formatting issues found\n\n`;
+              comment += `Run \`mvn spotless:apply\` to fix formatting issues.\n\n`;
+            }
+
+            // Test results
+            comment += `### 🧪 Tests\n`;
+            if (testsPassed && parseInt(totalTests) > 0) {
+              comment += `✅ All ${totalTests} test(s) passed\n\n`;
+            } else if (parseInt(totalTests) === 0) {
+              comment += `⚠️ No tests found\n\n`;
+            } else {
+              comment += `❌ ${failedTests} failed, ${errorTests} errors out of ${totalTests} total\n\n`;
+            }
+
+            // Footer
+            comment += `---\n`;
+            comment += `💡 **Tip:** Check the "Files changed" tab to see inline annotations on specific lines of code.\n\n`;
+            comment += `*Generated by CI workflow*\n`;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('CI Report')
+            );
+
+            // Create or update comment
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }
+
+      - name: Generate Job Summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            const spotbugsBugs = '${{ steps.spotbugs.outputs.total_bugs }}' || '0';
+            const spotlessFormatted = '${{ steps.spotless.outputs.formatted }}' === 'true';
+            const totalTests = '${{ steps.tests.outputs.total }}' || '0';
+            const failedTests = '${{ steps.tests.outputs.failed }}' || '0';
+            const errorTests = '${{ steps.tests.outputs.errors }}' || '0';
+            const mavenExitCode = '${{ steps.maven-verify.outputs.exit_code }}' || '0';
+
+            const passedTests = parseInt(totalTests) - parseInt(failedTests) - parseInt(errorTests);
+            const testsPassed = parseInt(failedTests) === 0 && parseInt(errorTests) === 0;
+            const buildPassed = mavenExitCode === '0';
+
+            // Determine overall status
+            let overallStatus = '✅ PASSED';
+            let overallEmoji = '✅';
+            if (!buildPassed || !testsPassed || !spotlessFormatted || parseInt(spotbugsBugs) > 0) {
+              overallStatus = '❌ FAILED';
+              overallEmoji = '❌';
+            }
+
+            // Build the job summary with markdown
+            let summary = `# ${overallEmoji} CI Report\n\n`;
+            summary += `## Overall Status: ${overallStatus}\n\n`;
+            summary += `---\n\n`;
+
+            // Create status table
+            summary += `## 📊 Summary\n\n`;
+            summary += `| Check | Status | Details |\n`;
+            summary += `|-------|--------|----------|\n`;
+            summary += `| 🏗️ Build | ${buildPassed ? '✅ Passed' : '❌ Failed'} | Maven verify |\n`;
+            summary += `| 🐛 SpotBugs | ${parseInt(spotbugsBugs) === 0 ? '✅ Passed' : '⚠️ Issues Found'} | ${spotbugsBugs} bug(s) |\n`;
+            summary += `| 💅 Code Format | ${spotlessFormatted ? '✅ Passed' : '❌ Failed'} | Google Java Format |\n`;
+            summary += `| 🧪 Tests | ${testsPassed ? '✅ Passed' : '❌ Failed'} | ${passedTests}/${totalTests} passed |\n\n`;
+
+            // SpotBugs detailed breakdown
+            summary += `## 🐛 SpotBugs Analysis\n\n`;
+            if (parseInt(spotbugsBugs) === 0) {
+              summary += `✅ **No bugs found!**\n\n`;
+            } else {
+              summary += `⚠️ **Found ${spotbugsBugs} potential bug(s)**\n\n`;
+
+              // Try to get bug patterns breakdown
+              const spotbugsFiles = [];
+              try {
+                const { execSync } = require('child_process');
+                const output = execSync('find . -name "spotbugsXml.xml" -type f').toString().trim();
+                if (output) {
+                  spotbugsFiles.push(...output.split('\n'));
+                }
+              } catch (error) {
+                console.log('Could not find SpotBugs files');
+              }
+
+              if (spotbugsFiles.length > 0) {
+                const bugPatterns = {};
+                const bugPriorities = { '1': 0, '2': 0, '3': 0 };
+
+                for (const file of spotbugsFiles) {
+                  try {
+                    const xml = fs.readFileSync(file, 'utf8');
+                    const bugPattern = /<BugInstance[^>]*type="([^"]*)"[^>]*priority="([^"]*)"[^>]*>/g;
+                    let match;
+
+                    while ((match = bugPattern.exec(xml)) !== null) {
+                      const type = match[1];
+                      const priority = match[2];
+                      bugPatterns[type] = (bugPatterns[type] || 0) + 1;
+                      bugPriorities[priority] = (bugPriorities[priority] || 0) + 1;
+                    }
+                  } catch (error) {
+                    console.log(`Could not read ${file}`);
+                  }
+                }
+
+                // Show priority breakdown
+                summary += `### Severity Breakdown\n\n`;
+                summary += `| Priority | Count | Description |\n`;
+                summary += `|----------|-------|-------------|\n`;
+                summary += `| 🔴 High (P1) | ${bugPriorities['1']} | Most important bugs |\n`;
+                summary += `| 🟡 Medium (P2) | ${bugPriorities['2']} | Moderate issues |\n`;
+                summary += `| 🔵 Low (P3) | ${bugPriorities['3']} | Minor concerns |\n\n`;
+
+                // Show top bug patterns
+                const sortedPatterns = Object.entries(bugPatterns).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                if (sortedPatterns.length > 0) {
+                  summary += `### Top Bug Patterns\n\n`;
+                  summary += `| Pattern | Count |\n`;
+                  summary += `|---------|-------|\n`;
+                  for (const [pattern, count] of sortedPatterns) {
+                    summary += `| \`${pattern}\` | ${count} |\n`;
+                  }
+                  summary += `\n`;
+                }
+              }
+
+              summary += `> 💡 Run \`mvn spotbugs:gui\` locally to view detailed reports\n\n`;
+            }
+
+            // Spotless formatting
+            summary += `## 💅 Code Formatting\n\n`;
+            if (spotlessFormatted) {
+              summary += `✅ **All code is properly formatted** (Google Java Format)\n\n`;
+            } else {
+              summary += `❌ **Code formatting issues detected**\n\n`;
+              summary += `> 💡 Run \`mvn spotless:apply\` to automatically fix formatting issues\n\n`;
+            }
+
+            // Test results
+            summary += `## 🧪 Test Results\n\n`;
+            if (parseInt(totalTests) === 0) {
+              summary += `⚠️ **No tests found**\n\n`;
+            } else if (testsPassed) {
+              summary += `✅ **All tests passed!**\n\n`;
+              summary += `📈 **${totalTests}** tests executed successfully\n\n`;
+            } else {
+              summary += `❌ **Some tests failed**\n\n`;
+              summary += `| Status | Count |\n`;
+              summary += `|--------|-------|\n`;
+              summary += `| ✅ Passed | ${passedTests} |\n`;
+              summary += `| ❌ Failed | ${failedTests} |\n`;
+              summary += `| 💥 Errors | ${errorTests} |\n`;
+              summary += `| 📊 Total | ${totalTests} |\n\n`;
+            }
+
+            // Footer
+            summary += `---\n\n`;
+            summary += `💡 **Tip:** Check the "Files changed" tab in the PR to see inline annotations on specific lines of code.\n\n`;
+            summary += `🔗 **PR:** #${{ github.event.pull_request.number }}\n`;
+            summary += `📝 **Commit:** ${{ github.event.pull_request.head.sha }}\n`;
+
+            // Write to job summary
+            fs.writeFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+
+      - name: Fail if quality checks failed
+        if: steps.maven-verify.outputs.exit_code != '0'
+        run: |
+          echo "Code quality checks failed. See the report above."
+          exit 1

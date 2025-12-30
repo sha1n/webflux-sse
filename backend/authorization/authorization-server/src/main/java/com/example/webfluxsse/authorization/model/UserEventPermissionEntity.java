@@ -7,8 +7,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;
 
 /**
- * UserEventPermission database entity - internal persistence model.
- * Used for R2DBC (PostgreSQL) persistence.
+ * UserEventPermission database entity - internal persistence model. Used for R2DBC (PostgreSQL)
+ * persistence.
  */
 @Data
 @NoArgsConstructor
@@ -16,16 +16,13 @@ import org.springframework.data.relational.core.mapping.Table;
 @Table("user_event_permissions")
 public class UserEventPermissionEntity {
 
-    @Id
-    private Long id;
-    private Long eventId;
-    private String userId;
+  @Id private Long id;
+  private Long eventId;
+  private String userId;
 
-    /**
-     * Constructor for creating new permissions without an ID.
-     */
-    public UserEventPermissionEntity(Long eventId, String userId) {
-        this.eventId = eventId;
-        this.userId = userId;
-    }
+  /** Constructor for creating new permissions without an ID. */
+  public UserEventPermissionEntity(Long eventId, String userId) {
+    this.eventId = eventId;
+    this.userId = userId;
+  }
 }

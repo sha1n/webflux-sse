@@ -8,20 +8,16 @@ import org.springframework.data.elasticsearch.repository.config.EnableReactiveEl
 import org.springframework.data.r2dbc.repository.config.EnableR2dbcRepositories;
 
 @Configuration
-@EnableR2dbcRepositories(
-    basePackages = "com.example.webfluxsse.search.repository.r2dbc"
-)
+@EnableR2dbcRepositories(basePackages = "com.example.webfluxsse.search.repository.r2dbc")
 public class DatabaseConfig {
 
-    @Configuration
-    @ConditionalOnProperty(name = "spring.elasticsearch.uris")
-    @EnableReactiveElasticsearchRepositories(
-        basePackages = "com.example.webfluxsse.search.repository.elasticsearch",
-        excludeFilters = @ComponentScan.Filter(
-            type = FilterType.REGEX,
-            pattern = "com.example.webfluxsse.search.repository.r2dbc.*"
-        )
-    )
-    static class ElasticsearchConfig {
-    }
+  @Configuration
+  @ConditionalOnProperty(name = "spring.elasticsearch.uris")
+  @EnableReactiveElasticsearchRepositories(
+      basePackages = "com.example.webfluxsse.search.repository.elasticsearch",
+      excludeFilters =
+          @ComponentScan.Filter(
+              type = FilterType.REGEX,
+              pattern = "com.example.webfluxsse.search.repository.r2dbc.*"))
+  static class ElasticsearchConfig {}
 }

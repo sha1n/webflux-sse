@@ -7,6 +7,6 @@ import reactor.core.publisher.Flux;
 
 public interface EventRepository extends ReactiveCrudRepository<EventEntity, Long> {
 
-    @Query("SELECT * FROM events ORDER BY timestamp DESC")
-    Flux<EventEntity> findAllOrderByTimestampDesc();
+  @Query("SELECT * FROM events ORDER BY timestamp DESC")
+  Flux<EventEntity> findAllOrderByTimestampDesc();
 }
