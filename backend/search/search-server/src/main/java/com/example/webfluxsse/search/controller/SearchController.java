@@ -29,7 +29,8 @@ public class SearchController {
         description = "Performs full-text search across event titles and descriptions using Elasticsearch. " +
                       "Results are filtered based on user permissions via the authorization-service. " +
                       "Returns NDJSON stream (one JSON object per line) for efficient streaming. " +
-                      "Uses RPC-style POST endpoint with request body for search parameters."
+                      "Uses RPC-style POST endpoint with request body for search parameters. " +
+                      "Limited to 200 authorized results by default (customizable via limit parameter)."
     )
     @ApiResponses(value = {
         @ApiResponse(
@@ -56,7 +57,7 @@ public class SearchController {
         )
         @org.springframework.web.bind.annotation.RequestBody SearchRequest request
     ) {
-        return searchService.searchEventsForUser(request.query(), request.userId());
+        return searchService.searchEventsForUser(request.query(), request.userId(), request.limit());
     }
 
     @Operation(
@@ -65,7 +66,8 @@ public class SearchController {
                       "Results are filtered based on user permissions via the authorization-service. " +
                       "Returns Server-Sent Events for real-time streaming. " +
                       "Uses RPC-style POST endpoint with request body for search parameters. " +
-                      "Content negotiation: Request with Accept: text/event-stream to get this response."
+                      "Content negotiation: Request with Accept: text/event-stream to get this response. " +
+                      "Limited to 200 authorized results by default (customizable via limit parameter)."
     )
     @ApiResponses(value = {
         @ApiResponse(
@@ -92,7 +94,7 @@ public class SearchController {
         )
         @org.springframework.web.bind.annotation.RequestBody SearchRequest request
     ) {
-        return searchService.searchEventsForUser(request.query(), request.userId())
+        return searchService.searchEventsForUser(request.query(), request.userId(), request.limit())
                 .map(event -> ServerSentEvent.<Event>builder()
                         .data(event)
                         .build());
@@ -103,7 +105,8 @@ public class SearchController {
         description = "Performs full-text search using Server-Sent Events. " +
                       "This GET endpoint is compatible with the native EventSource API, " +
                       "allowing Chrome DevTools to display events in the EventStream tab. " +
-                      "Results are filtered based on user permissions."
+                      "Results are filtered based on user permissions. " +
+                      "Limited to 200 authorized results by default (customizable via limit query parameter)."
     )
     @ApiResponses(value = {
         @ApiResponse(
@@ -122,9 +125,10 @@ public class SearchController {
     @GetMapping(value = "/api/v1/search/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<Event>> searchSseGet(
         @RequestParam(required = false) String query,
-        @RequestParam String userId
+        @RequestParam String userId,
+        @RequestParam(required = false) Integer limit
     ) {
-        return searchService.searchEventsForUser(query, userId)
+        return searchService.searchEventsForUser(query, userId, limit)
                 .map(event -> ServerSentEvent.<Event>builder()
                         .data(event)
                         .build());
