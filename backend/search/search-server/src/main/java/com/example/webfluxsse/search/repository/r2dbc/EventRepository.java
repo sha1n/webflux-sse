@@ -9,9 +9,9 @@ import java.time.LocalDateTime;
 
 public interface EventRepository extends ReactiveCrudRepository<EventEntity, Long> {
 
-    @Query("SELECT * FROM events ORDER BY timestamp DESC")
+    @Query("SELECT * FROM events ORDER BY timestamp DESC LIMIT 200")
     Flux<EventEntity> findAllOrderByTimestampDesc();
 
-    @Query("SELECT * FROM events WHERE timestamp > :since ORDER BY timestamp DESC")
+    @Query("SELECT * FROM events WHERE timestamp > :since ORDER BY timestamp DESC LIMIT 200")
     Flux<EventEntity> findByTimestampAfterOrderByTimestampDesc(LocalDateTime since);
 }

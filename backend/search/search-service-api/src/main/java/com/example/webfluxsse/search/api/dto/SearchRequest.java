@@ -15,5 +15,10 @@ public record SearchRequest(
     @Schema(description = "User identifier for permission filtering",
             example = "user123",
             required = true)
-    String userId
+    String userId,
+
+    @Schema(description = "Maximum number of results to return (after authorization filtering). Defaults to 200.",
+            example = "50",
+            required = false)
+    Integer limit
 ) {}
