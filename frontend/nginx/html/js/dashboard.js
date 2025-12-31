@@ -1,93 +1,141 @@
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
 
 function EventDashboard() {
     const [events, setEvents] = useState([]);
     const [connectionStatus, setConnectionStatus] = useState('connecting');
     const [lastUpdateTime, setLastUpdateTime] = useState(null);
+    const latestTimestampRef = useRef(null);
+    const MAX_EVENTS = 100; // Maximum number of events to keep in memory
 
     useEffect(() => {
-        const eventSource = new EventSource('/api/v1/events');
+        let eventSource = null;
         let currentBatch = [];
         let batchTimeout = null;
-        let connectionTimeout = null;
+        let heartbeatTimeout = null;
+        let reconnectTimeout = null;
+        let isCleaningUp = false;
 
-        // Set a timeout to detect if we don't receive any data within 5 seconds
-        connectionTimeout = setTimeout(() => {
-            if (eventSource.readyState !== EventSource.OPEN) {
-                console.log('❌ Connection timeout - no response from server');
-                setConnectionStatus('disconnected');
-            }
-        }, 5000);
+        const connect = () => {
+            if (isCleaningUp) return;
 
-        eventSource.onopen = () => {
-            console.log('✅ SSE connection opened');
-            // Don't set to connected yet, wait for actual data or heartbeat
-        };
+            // Use 'since' parameter to only fetch events after the latest one we have
+            const url = latestTimestampRef.current
+                ? `/api/v1/events?since=${encodeURIComponent(latestTimestampRef.current)}`
+                : '/api/v1/events';
 
-        // Handle heartbeat events (sent when there are no data events)
-        eventSource.addEventListener('heartbeat', () => {
-            console.log('💓 Received heartbeat');
-            if (connectionTimeout) {
-                clearTimeout(connectionTimeout);
-                connectionTimeout = null;
-            }
-            setConnectionStatus('connected');
-        });
+            console.log(`🔄 Connecting to SSE stream: ${url}`);
+            eventSource = new EventSource(url);
 
-        eventSource.onmessage = (event) => {
-            if (connectionTimeout) {
-                clearTimeout(connectionTimeout);
-                connectionTimeout = null;
-            }
-            setConnectionStatus('connected');
+            const resetHeartbeatTimeout = () => {
+                if (heartbeatTimeout) {
+                    clearTimeout(heartbeatTimeout);
+                }
+                // If we don't receive a heartbeat within 10 seconds, reconnect
+                heartbeatTimeout = setTimeout(() => {
+                    if (isCleaningUp) return;
+                    console.log('💔 No heartbeat received in 10s - reconnecting...');
+                    setConnectionStatus('connecting');
+                    eventSource.close();
+                    if (reconnectTimeout) clearTimeout(reconnectTimeout);
+                    reconnectTimeout = setTimeout(connect, 1000);
+                }, 10000);
+            };
 
-            try {
-                const eventData = JSON.parse(event.data);
-                console.log('📨 Received event:', eventData);
+            eventSource.onopen = () => {
+                console.log('✅ SSE connection opened');
+                setConnectionStatus('connected');
+                resetHeartbeatTimeout();
+            };
 
-                currentBatch.push(eventData);
+            // Handle heartbeat events to keep connection alive
+            eventSource.addEventListener('heartbeat', () => {
+                console.log('💓 Received heartbeat');
+                setConnectionStatus('connected');
+                resetHeartbeatTimeout();
+            });
 
-                if (batchTimeout) {
-                    clearTimeout(batchTimeout);
+            eventSource.onmessage = (event) => {
+                setConnectionStatus('connected');
+                resetHeartbeatTimeout();
+
+                try {
+                    const eventData = JSON.parse(event.data);
+                    console.log('📨 Received event:', eventData);
+
+                    currentBatch.push(eventData);
+
+                    if (batchTimeout) {
+                        clearTimeout(batchTimeout);
+                    }
+
+                    batchTimeout = setTimeout(() => {
+                        setEvents(prevEvents => {
+                            // Merge new events with existing ones
+                            const mergedEvents = [...currentBatch, ...prevEvents];
+
+                            // Remove duplicates by ID
+                            const uniqueEvents = Array.from(
+                                new Map(mergedEvents.map(e => [e.id, e])).values()
+                            );
+
+                            // Sort by timestamp (newest first)
+                            uniqueEvents.sort((a, b) =>
+                                new Date(b.timestamp) - new Date(a.timestamp)
+                            );
+
+                            // Keep only the most recent MAX_EVENTS
+                            const limitedEvents = uniqueEvents.slice(0, MAX_EVENTS);
+
+                            // Update the latest timestamp for next reconnection
+                            if (limitedEvents.length > 0) {
+                                latestTimestampRef.current = limitedEvents[0].timestamp;
+                            }
+
+                            return limitedEvents;
+                        });
+                        setLastUpdateTime(new Date());
+                        currentBatch = [];
+                    }, 100);
+
+                } catch (error) {
+                    console.error('❌ Error parsing event data:', error);
+                }
+            };
+
+            eventSource.onerror = (error) => {
+                if (isCleaningUp) return;
+
+                console.error('⚠️ SSE error:', error, 'readyState:', eventSource.readyState);
+
+                if (heartbeatTimeout) {
+                    clearTimeout(heartbeatTimeout);
+                    heartbeatTimeout = null;
                 }
 
-                batchTimeout = setTimeout(() => {
-                    setEvents(currentBatch.slice(0, 100));
-                    setLastUpdateTime(new Date());
-                    currentBatch = [];
-                }, 100);
-
-            } catch (error) {
-                console.error('❌ Error parsing event data:', error);
-            }
+                // Show connecting status and attempt to reconnect
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    console.log('❌ Connection closed - reconnecting in 2s...');
+                    setConnectionStatus('connecting');
+                    eventSource.close();
+                    if (reconnectTimeout) clearTimeout(reconnectTimeout);
+                    reconnectTimeout = setTimeout(connect, 2000);
+                } else if (eventSource.readyState === EventSource.CONNECTING) {
+                    console.log('⏳ Connection failed, retrying...');
+                    setConnectionStatus('connecting');
+                }
+            };
         };
 
-        eventSource.onerror = (error) => {
-            console.error('⚠️ SSE error:', error, 'readyState:', eventSource.readyState);
-
-            if (connectionTimeout) {
-                clearTimeout(connectionTimeout);
-                connectionTimeout = null;
-            }
-
-            // Show disconnected if connection is closed or connecting failed
-            if (eventSource.readyState === EventSource.CLOSED) {
-                console.log('❌ Connection closed - setting status to disconnected');
-                setConnectionStatus('disconnected');
-            } else if (eventSource.readyState === EventSource.CONNECTING) {
-                console.log('⏳ Connection failed, retrying...');
-                setConnectionStatus('connecting');
-            }
-        };
+        // Initial connection
+        connect();
 
         return () => {
-            if (connectionTimeout) {
-                clearTimeout(connectionTimeout);
-            }
-            if (batchTimeout) {
-                clearTimeout(batchTimeout);
-            }
-            eventSource.close();
+            console.log('🧹 Cleaning up SSE connection');
+            isCleaningUp = true;
+            if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
+            if (batchTimeout) clearTimeout(batchTimeout);
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            if (eventSource) eventSource.close();
         };
     }, []);
 
