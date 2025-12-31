@@ -61,14 +61,13 @@ for i in $(seq 1 $EVENT_COUNT); do
     echo -e "${GREEN}Created event $i with ID: $event_id${NC}"
     ((events_created++))
 
-    # Step 2: Assign permissions randomly
-    # Generate random numbers (0 or 1) for each user
-    grant_user1=$((RANDOM % 2))
-    grant_user2=$((RANDOM % 2))
-    grant_user3=$((RANDOM % 2))
+    # Step 2: Assign permissions based on event ID (deterministic)
+    # user1: 1 in 1000 (IDs where ID % 1000 == 0)
+    # user2: 1 in 2000 (IDs where ID % 2000 == 0)
+    # user3: 1 in 3000 (IDs where ID % 3000 == 0)
 
-    # Grant permission to user1 (if random says yes)
-    if [ $grant_user1 -eq 1 ]; then
+    # Grant permission to user1 (every 1000th ID)
+    if [ $((event_id % 1000)) -eq 0 ]; then
         curl -s -X POST "$BASE_URL/permissions/bulk" \
             -H "Content-Type: application/json" \
             -d "{\"userId\": \"user1\", \"eventIds\": [$event_id]}" > /dev/null
@@ -76,8 +75,8 @@ for i in $(seq 1 $EVENT_COUNT); do
         echo "  ✓ Granted permission to user1"
     fi
 
-    # Grant permission to user2 (if random says yes)
-    if [ $grant_user2 -eq 1 ]; then
+    # Grant permission to user2 (every 2000th ID)
+    if [ $((event_id % 2000)) -eq 0 ]; then
         curl -s -X POST "$BASE_URL/permissions/bulk" \
             -H "Content-Type: application/json" \
             -d "{\"userId\": \"user2\", \"eventIds\": [$event_id]}" > /dev/null
@@ -85,8 +84,8 @@ for i in $(seq 1 $EVENT_COUNT); do
         echo "  ✓ Granted permission to user2"
     fi
 
-    # Grant permission to user3 (if random says yes)
-    if [ $grant_user3 -eq 1 ]; then
+    # Grant permission to user3 (every 3000th ID)
+    if [ $((event_id % 3000)) -eq 0 ]; then
         curl -s -X POST "$BASE_URL/permissions/bulk" \
             -H "Content-Type: application/json" \
             -d "{\"userId\": \"user3\", \"eventIds\": [$event_id]}" > /dev/null
