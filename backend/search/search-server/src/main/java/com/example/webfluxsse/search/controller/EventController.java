@@ -34,7 +34,8 @@ public class EventController {
 
     @Operation(
         summary = "Stream events via Server-Sent Events (SSE)",
-        description = "Opens a persistent connection that streams all events every 2 seconds with deduplication. " +
+        description = "Opens a persistent connection that streams events every 2 seconds with deduplication. " +
+                      "Optionally accepts a 'since' parameter to only fetch events after a specific timestamp. " +
                       "The stream automatically updates when new events are created. " +
                       "Use Accept: text/event-stream header to access this endpoint."
     )
@@ -49,23 +50,37 @@ public class EventController {
         )
     })
     @GetMapping(value = "/api/v1/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<Event>> streamEvents() {
-        log.info("Starting SSE stream for events");
+    public Flux<ServerSentEvent<Event>> streamEvents(
+        @RequestParam(value = "since", required = false)
+        @Schema(description = "ISO 8601 timestamp to fetch events after (e.g., 2024-01-01T10:00:00)",
+                example = "2024-01-01T10:00:00")
+        LocalDateTime since
+    ) {
+        if (since != null) {
+            log.info("Starting SSE stream for events since {}", since);
+        } else {
+            log.info("Starting SSE stream for all events");
+        }
+
         return Flux.interval(Duration.ofSeconds(2))
                 .flatMap(tick -> {
-                    Flux<ServerSentEvent<Event>> dataEvents = eventsService.getAllEvents()
+                    Flux<ServerSentEvent<Event>> dataEvents = (since != null
+                            ? eventsService.getEventsSince(since)
+                            : eventsService.getAllEvents())
                             .map(event -> ServerSentEvent.builder(event).build());
 
-                    // Send a heartbeat event when there are no events to keep connection alive
+                    // Always send a heartbeat with a unique comment to keep connection alive
+                    // The comment contains the tick number to ensure it's not deduplicated
                     Flux<ServerSentEvent<Event>> heartbeat = Flux.just(
                             ServerSentEvent.<Event>builder()
                                     .event("heartbeat")
+                                    .comment("tick-" + tick)
                                     .build()
                     );
 
-                    return dataEvents.switchIfEmpty(heartbeat);
+                    // Concatenate data events with heartbeat, so heartbeat is always sent
+                    return dataEvents.concatWith(heartbeat);
                 })
-                .distinctUntilChanged()
                 .doOnSubscribe(sub -> log.info("Client subscribed to event stream"))
                 .doOnCancel(() -> log.info("Client cancelled event stream"));
     }

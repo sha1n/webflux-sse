@@ -36,6 +36,11 @@ public class EventsService {
                 .map(EventMapper::toDto);
     }
 
+    public Flux<Event> getEventsSince(java.time.LocalDateTime since) {
+        return eventRepository.findByTimestampAfterOrderByTimestampDesc(since)
+                .map(EventMapper::toDto);
+    }
+
     public Mono<Event> saveEvent(Event event) {
         EventEntity entity = EventMapper.toEntity(event);
 
