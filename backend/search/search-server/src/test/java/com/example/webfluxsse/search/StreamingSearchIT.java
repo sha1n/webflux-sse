@@ -184,4 +184,368 @@ class StreamingSearchIT {
                 .expectNextCount(12) // We expect 12 events (odd numbers from 0-24)
                 .verifyComplete();
     }
+
+    @Test
+    @DisplayName("Should search with spaces in query")
+    void shouldSearchWithSpacesInQuery() throws Exception {
+        // 1. Create events with multi-word titles
+        String userId = "user1";
+        List<EventEntity> entities = new ArrayList<>();
+
+        Event event1 = new Event(LocalDateTime.now(), "Important System Alert", "Critical system failure detected");
+        Event event2 = new Event(LocalDateTime.now(), "User Login Success", "User authenticated successfully");
+        Event event3 = new Event(LocalDateTime.now(), "Database Connection", "Connection pool exhausted");
+
+        EventEntity entity1 = eventRepository.save(EventMapper.toEntity(event1)).block();
+        EventEntity entity2 = eventRepository.save(EventMapper.toEntity(event2)).block();
+        EventEntity entity3 = eventRepository.save(EventMapper.toEntity(event3)).block();
+
+        entities.add(entity1);
+        entities.add(entity2);
+        entities.add(entity3);
+
+        // 2. Index in Elasticsearch
+        elasticsearchRepository.saveAll(entities).collectList().block();
+
+        // 3. Mock authorization - user1 has access to all events
+        Set<Long> allEventIds = entities.stream().map(EventEntity::getId).collect(Collectors.toSet());
+
+        stubFor(post(urlEqualTo("/api/v1/permissions/batch-check"))
+                .withRequestBody(matchingJsonPath("$.userId", equalTo(userId)))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(objectMapper.writeValueAsString(Map.of(
+                                "userId", userId,
+                                "authorizedEventIds", allEventIds
+                        )))));
+
+        // Allow ES to refresh
+        Thread.sleep(2000);
+
+        // 4. Search with multi-word query (should find "Important System Alert")
+        Flux<Event> responseBody = webTestClient.post()
+                .uri("/api/rpc/v1/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_NDJSON)
+                .bodyValue(Map.of("query", "System Alert", "userId", userId))
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_NDJSON)
+                .returnResult(Event.class)
+                .getResponseBody();
+
+        // 5. Verify we get the matching event
+        StepVerifier.create(responseBody)
+                .expectNextMatches(event -> event.title().contains("System Alert"))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should search in descriptions")
+    void shouldSearchInDescriptions() throws Exception {
+        // 1. Create events with searchable descriptions
+        String userId = "user1";
+        List<EventEntity> entities = new ArrayList<>();
+
+        Event event1 = new Event(LocalDateTime.now(), "Event A", "Authentication process completed successfully");
+        Event event2 = new Event(LocalDateTime.now(), "Event B", "Database query optimization");
+        Event event3 = new Event(LocalDateTime.now(), "Event C", "Network timeout during authentication");
+
+        EventEntity entity1 = eventRepository.save(EventMapper.toEntity(event1)).block();
+        EventEntity entity2 = eventRepository.save(EventMapper.toEntity(event2)).block();
+        EventEntity entity3 = eventRepository.save(EventMapper.toEntity(event3)).block();
+
+        entities.add(entity1);
+        entities.add(entity2);
+        entities.add(entity3);
+
+        // 2. Index in Elasticsearch
+        elasticsearchRepository.saveAll(entities).collectList().block();
+
+        // 3. Mock authorization - user1 has access to all events
+        Set<Long> allEventIds = entities.stream().map(EventEntity::getId).collect(Collectors.toSet());
+
+        stubFor(post(urlEqualTo("/api/v1/permissions/batch-check"))
+                .withRequestBody(matchingJsonPath("$.userId", equalTo(userId)))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(objectMapper.writeValueAsString(Map.of(
+                                "userId", userId,
+                                "authorizedEventIds", allEventIds
+                        )))));
+
+        // Allow ES to refresh
+        Thread.sleep(2000);
+
+        // 4. Search for "authentication" - should find events 1 and 3 (in descriptions)
+        Flux<Event> responseBody = webTestClient.post()
+                .uri("/api/rpc/v1/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_NDJSON)
+                .bodyValue(Map.of("query", "authentication", "userId", userId))
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_NDJSON)
+                .returnResult(Event.class)
+                .getResponseBody();
+
+        // 5. Verify we get events with "authentication" in description
+        StepVerifier.create(responseBody.collectList())
+                .expectNextMatches(events -> {
+                    return events.size() == 2 &&
+                           events.stream().allMatch(e -> e.description().toLowerCase().contains("authentication"));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should handle special characters in search query")
+    void shouldHandleSpecialCharactersInQuery() throws Exception {
+        // 1. Create events with special characters
+        String userId = "user1";
+        List<EventEntity> entities = new ArrayList<>();
+
+        Event event1 = new Event(LocalDateTime.now(), "API/v1 endpoint", "REST API endpoint for users");
+        Event event2 = new Event(LocalDateTime.now(), "Error: 404", "Page not found error");
+        Event event3 = new Event(LocalDateTime.now(), "User@Domain", "Email validation");
+
+        EventEntity entity1 = eventRepository.save(EventMapper.toEntity(event1)).block();
+        EventEntity entity2 = eventRepository.save(EventMapper.toEntity(event2)).block();
+        EventEntity entity3 = eventRepository.save(EventMapper.toEntity(event3)).block();
+
+        entities.add(entity1);
+        entities.add(entity2);
+        entities.add(entity3);
+
+        // 2. Index in Elasticsearch
+        elasticsearchRepository.saveAll(entities).collectList().block();
+
+        // 3. Mock authorization - user1 has access to all events
+        Set<Long> allEventIds = entities.stream().map(EventEntity::getId).collect(Collectors.toSet());
+
+        stubFor(post(urlEqualTo("/api/v1/permissions/batch-check"))
+                .withRequestBody(matchingJsonPath("$.userId", equalTo(userId)))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(objectMapper.writeValueAsString(Map.of(
+                                "userId", userId,
+                                "authorizedEventIds", allEventIds
+                        )))));
+
+        // Allow ES to refresh
+        Thread.sleep(2000);
+
+        // 4. Search for "API" - should find event with "API/v1 endpoint"
+        Flux<Event> responseBody = webTestClient.post()
+                .uri("/api/rpc/v1/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_NDJSON)
+                .bodyValue(Map.of("query", "API", "userId", userId))
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_NDJSON)
+                .returnResult(Event.class)
+                .getResponseBody();
+
+        // 5. Verify we get the API event
+        StepVerifier.create(responseBody)
+                .expectNextMatches(event -> event.title().contains("API") || event.description().contains("API"))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should search exact phrase with quotes")
+    void shouldSearchExactPhraseWithQuotes() throws Exception {
+        // 1. Create events with similar but different phrases
+        String userId = "user1";
+        List<EventEntity> entities = new ArrayList<>();
+
+        Event event1 = new Event(LocalDateTime.now(), "Critical system failure detected", "Production database offline");
+        Event event2 = new Event(LocalDateTime.now(), "System failure was critical yesterday", "Resolved now");
+        Event event3 = new Event(LocalDateTime.now(), "Critical failure in system components", "Under investigation");
+        Event event4 = new Event(LocalDateTime.now(), "Routine maintenance", "System is operational");
+
+        EventEntity entity1 = eventRepository.save(EventMapper.toEntity(event1)).block();
+        EventEntity entity2 = eventRepository.save(EventMapper.toEntity(event2)).block();
+        EventEntity entity3 = eventRepository.save(EventMapper.toEntity(event3)).block();
+        EventEntity entity4 = eventRepository.save(EventMapper.toEntity(event4)).block();
+
+        entities.add(entity1);
+        entities.add(entity2);
+        entities.add(entity3);
+        entities.add(entity4);
+
+        // 2. Index in Elasticsearch
+        elasticsearchRepository.saveAll(entities).collectList().block();
+
+        // 3. Mock authorization - user1 has access to all events
+        Set<Long> allEventIds = entities.stream().map(EventEntity::getId).collect(Collectors.toSet());
+
+        stubFor(post(urlEqualTo("/api/v1/permissions/batch-check"))
+                .withRequestBody(matchingJsonPath("$.userId", equalTo(userId)))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(objectMapper.writeValueAsString(Map.of(
+                                "userId", userId,
+                                "authorizedEventIds", allEventIds
+                        )))));
+
+        // Allow ES to refresh
+        Thread.sleep(2000);
+
+        // 4. Search with exact phrase "Critical system failure" - should only find event1
+        Flux<Event> responseBody = webTestClient.post()
+                .uri("/api/rpc/v1/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_NDJSON)
+                .bodyValue(Map.of("query", "\"Critical system failure\"", "userId", userId))
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_NDJSON)
+                .returnResult(Event.class)
+                .getResponseBody();
+
+        // 5. Verify we only get the exact match (event1)
+        StepVerifier.create(responseBody.collectList())
+                .expectNextMatches(events -> {
+                    return events.size() == 1 &&
+                           events.get(0).title().equals("Critical system failure detected");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should differentiate between exact phrase and regular search")
+    void shouldDifferentiateBetweenExactPhraseAndRegularSearch() throws Exception {
+        // 1. Create events
+        String userId = "user1";
+        List<EventEntity> entities = new ArrayList<>();
+
+        Event event1 = new Event(LocalDateTime.now(), "User login successful", "Authentication completed");
+        Event event2 = new Event(LocalDateTime.now(), "Login successful for user", "New session created");
+        Event event3 = new Event(LocalDateTime.now(), "Successful login user account", "Access granted");
+
+        EventEntity entity1 = eventRepository.save(EventMapper.toEntity(event1)).block();
+        EventEntity entity2 = eventRepository.save(EventMapper.toEntity(event2)).block();
+        EventEntity entity3 = eventRepository.save(EventMapper.toEntity(event3)).block();
+
+        entities.add(entity1);
+        entities.add(entity2);
+        entities.add(entity3);
+
+        // 2. Index in Elasticsearch
+        elasticsearchRepository.saveAll(entities).collectList().block();
+
+        // 3. Mock authorization - user1 has access to all events
+        Set<Long> allEventIds = entities.stream().map(EventEntity::getId).collect(Collectors.toSet());
+
+        stubFor(post(urlEqualTo("/api/v1/permissions/batch-check"))
+                .withRequestBody(matchingJsonPath("$.userId", equalTo(userId)))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(objectMapper.writeValueAsString(Map.of(
+                                "userId", userId,
+                                "authorizedEventIds", allEventIds
+                        )))));
+
+        // Allow ES to refresh
+        Thread.sleep(2000);
+
+        // 4a. Regular search for "user login" - should find all 3 events
+        Flux<Event> regularSearchBody = webTestClient.post()
+                .uri("/api/rpc/v1/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_NDJSON)
+                .bodyValue(Map.of("query", "user login", "userId", userId))
+                .exchange()
+                .expectStatus().isOk()
+                .returnResult(Event.class)
+                .getResponseBody();
+
+        StepVerifier.create(regularSearchBody.collectList())
+                .expectNextMatches(events -> events.size() == 3)
+                .verifyComplete();
+
+        // 4b. Exact phrase search for "User login successful" - should only find event1
+        Flux<Event> exactSearchBody = webTestClient.post()
+                .uri("/api/rpc/v1/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_NDJSON)
+                .bodyValue(Map.of("query", "\"User login successful\"", "userId", userId))
+                .exchange()
+                .expectStatus().isOk()
+                .returnResult(Event.class)
+                .getResponseBody();
+
+        StepVerifier.create(exactSearchBody.collectList())
+                .expectNextMatches(events -> {
+                    return events.size() == 1 &&
+                           events.get(0).title().equals("User login successful");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should search exact phrase in descriptions")
+    void shouldSearchExactPhraseInDescriptions() throws Exception {
+        // 1. Create events with phrases in descriptions
+        String userId = "user1";
+        List<EventEntity> entities = new ArrayList<>();
+
+        Event event1 = new Event(LocalDateTime.now(), "Event A", "Connection timeout occurred during database query");
+        Event event2 = new Event(LocalDateTime.now(), "Event B", "Database query timeout during connection");
+        Event event3 = new Event(LocalDateTime.now(), "Event C", "Query timeout connection occurred elsewhere");
+
+        EventEntity entity1 = eventRepository.save(EventMapper.toEntity(event1)).block();
+        EventEntity entity2 = eventRepository.save(EventMapper.toEntity(event2)).block();
+        EventEntity entity3 = eventRepository.save(EventMapper.toEntity(event3)).block();
+
+        entities.add(entity1);
+        entities.add(entity2);
+        entities.add(entity3);
+
+        // 2. Index in Elasticsearch
+        elasticsearchRepository.saveAll(entities).collectList().block();
+
+        // 3. Mock authorization - user1 has access to all events
+        Set<Long> allEventIds = entities.stream().map(EventEntity::getId).collect(Collectors.toSet());
+
+        stubFor(post(urlEqualTo("/api/v1/permissions/batch-check"))
+                .withRequestBody(matchingJsonPath("$.userId", equalTo(userId)))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(objectMapper.writeValueAsString(Map.of(
+                                "userId", userId,
+                                "authorizedEventIds", allEventIds
+                        )))));
+
+        // Allow ES to refresh
+        Thread.sleep(2000);
+
+        // 4. Search with exact phrase "timeout occurred during" - should only find event1
+        Flux<Event> responseBody = webTestClient.post()
+                .uri("/api/rpc/v1/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_NDJSON)
+                .bodyValue(Map.of("query", "\"timeout occurred during\"", "userId", userId))
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_NDJSON)
+                .returnResult(Event.class)
+                .getResponseBody();
+
+        // 5. Verify we only get event1
+        StepVerifier.create(responseBody.collectList())
+                .expectNextMatches(events -> {
+                    return events.size() == 1 &&
+                           events.get(0).description().equals("Connection timeout occurred during database query");
+                })
+                .verifyComplete();
+    }
 }
