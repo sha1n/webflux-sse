@@ -38,20 +38,36 @@ public class SearchService {
             return getEventsForUser(userId, resultLimit);
         }
 
-        log.debug("Searching events for query='{}', userId='{}', limit={}", query, userId, resultLimit);
+        // Check if query is an exact phrase match (wrapped in quotes)
+        String trimmedQuery = query.trim();
+        boolean isExactPhrase = trimmedQuery.startsWith("\"") && trimmedQuery.endsWith("\"") && trimmedQuery.length() > 2;
 
-        // Search in Elasticsearch
-        return elasticsearchRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(query, query)
+        String searchQuery;
+        Flux<EventEntity> searchResults;
+
+        if (isExactPhrase) {
+            // Extract phrase without quotes
+            searchQuery = trimmedQuery.substring(1, trimmedQuery.length() - 1);
+            log.debug("Exact phrase search for query='{}', userId='{}', limit={}", searchQuery, userId, resultLimit);
+            searchResults = elasticsearchRepository.searchByExactPhrase(searchQuery);
+        } else {
+            searchQuery = trimmedQuery;
+            log.debug("Full-text search for query='{}', userId='{}', limit={}", searchQuery, userId, resultLimit);
+            searchResults = elasticsearchRepository.searchByTitleOrDescription(searchQuery);
+        }
+
+        // Apply permission filtering and return results
+        return searchResults
                 .bufferTimeout(20, Duration.ofSeconds(5))
                 .flatMap(batch -> checkPermissionsBatch(batch, userId))
                 .flatMapIterable(java.util.function.Function.identity())
                 .take(resultLimit)
                 .map(EventMapper::toDto)
                 .doOnComplete(() -> log.debug("Search completed for query='{}', userId='{}', returned up to {} results",
-                        query, userId, resultLimit))
+                        searchQuery, userId, resultLimit))
                 .onErrorResume(error -> {
                     log.error("Elasticsearch search failed for query='{}', userId='{}': {}",
-                            query, userId, error.getMessage());
+                            searchQuery, userId, error.getMessage());
                     return Flux.empty();
                 });
     }
