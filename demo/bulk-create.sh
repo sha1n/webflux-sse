@@ -1,7 +1,9 @@
 #!/bin/bash
 
 # Bulk event creation script with random permission assignment
-# Usage: ./bulk-create.sh <number_of_events>
+# Usage: ./bulk-create.sh --count <number_of_events> [--size <description_size_kb>]
+#   --count: Number of events to create (required)
+#   --size:  Size of description in KB (optional, default: 0.5 KB = 500 bytes)
 
 # Colors for output
 RED='\033[0;31m'
@@ -10,23 +12,105 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Check if number argument is provided
-if [ -z "$1" ]; then
-    echo -e "${RED}Error: Please provide the number of events to create${NC}"
-    echo "Usage: $0 <number_of_events>"
+# Default values
+EVENT_COUNT=""
+DESC_SIZE_KB=0.5
+
+# Function to display usage
+usage() {
+    echo -e "${BLUE}Usage: $0 --count <number_of_events> [--size <description_size_kb>]${NC}"
+    echo -e "  ${GREEN}--count${NC}  Number of events to create (required)"
+    echo -e "  ${GREEN}--size${NC}   Size of description in KB (optional, default: 0.5 KB)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 --count 10                # Create 10 events with 500-byte descriptions"
+    echo "  $0 --count 100 --size 2      # Create 100 events with 2KB descriptions"
+    echo "  $0 --size 1 --count 50       # Order doesn't matter"
+    exit 1
+}
+
+# Parse named arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --count)
+            EVENT_COUNT="$2"
+            shift 2
+            ;;
+        --size)
+            DESC_SIZE_KB="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            echo -e "${RED}Error: Unknown argument '$1'${NC}"
+            usage
+            ;;
+    esac
+done
+
+# Validate required argument
+if [ -z "$EVENT_COUNT" ]; then
+    echo -e "${RED}Error: --count argument is required${NC}"
+    usage
+fi
+
+# Validate that event count is a positive number
+if ! [[ "$EVENT_COUNT" =~ ^[0-9]+$ ]] || [ "$EVENT_COUNT" -le 0 ]; then
+    echo -e "${RED}Error: --count must be a valid positive integer${NC}"
     exit 1
 fi
 
-# Validate that argument is a positive number
-if ! [[ "$1" =~ ^[0-9]+$ ]] || [ "$1" -le 0 ]; then
-    echo -e "${RED}Error: Please provide a valid positive number${NC}"
+# Validate description size
+if ! [[ "$DESC_SIZE_KB" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+    echo -e "${RED}Error: --size must be a positive number${NC}"
     exit 1
 fi
 
-EVENT_COUNT=$1
+# Calculate target description size in bytes
+DESC_SIZE_BYTES=$(awk "BEGIN {printf \"%.0f\", $DESC_SIZE_KB * 1024}")
+
 BASE_URL="http://localhost/api/v1"
 
+# Function to generate random text of approximately specified size
+generate_description() {
+    local target_size=$1
+    local current_size=0
+    local description=""
+
+    # Array of random words for more natural text
+    local words=("system" "process" "data" "event" "service" "application" "request" "response"
+                 "user" "session" "transaction" "operation" "function" "method" "component" "module"
+                 "interface" "implementation" "configuration" "parameter" "variable" "value" "result"
+                 "error" "exception" "handler" "controller" "repository" "entity" "model" "view"
+                 "network" "database" "cache" "queue" "stream" "buffer" "thread" "async" "sync"
+                 "authentication" "authorization" "validation" "encryption" "decryption" "encoding"
+                 "parsing" "serialization" "deserialization" "transformation" "mapping" "filtering")
+
+    local word_count=${#words[@]}
+
+    # Generate text until we reach approximately the target size
+    while [ $current_size -lt $target_size ]; do
+        # Get random word
+        local random_index=$((RANDOM % word_count))
+        local word="${words[$random_index]}"
+
+        # Add word and space
+        if [ -z "$description" ]; then
+            description="$word"
+        else
+            description="$description $word"
+        fi
+
+        current_size=${#description}
+    done
+
+    echo "$description"
+}
+
 echo -e "${BLUE}Creating $EVENT_COUNT events with random permissions...${NC}"
+echo -e "${BLUE}Description size: ${DESC_SIZE_KB} KB (approximately ${DESC_SIZE_BYTES} bytes)${NC}"
 echo
 
 # Counters for permission distribution
@@ -40,10 +124,13 @@ events_created=0
 for i in $(seq 1 $EVENT_COUNT); do
     echo -e "${YELLOW}Creating event $i of $EVENT_COUNT...${NC}"
 
+    # Generate description
+    description=$(generate_description $DESC_SIZE_BYTES)
+
     # Step 1: Create the event
     response=$(curl -s -X POST "$BASE_URL/events" \
         -H "Content-Type: application/json" \
-        -d "{\"title\": \"event $i\", \"description\": null}")
+        -d "{\"title\": \"Event $i of $EVENT_COUNT (~${DESC_SIZE_KB}kb)\", \"description\": \"$description\"}")
 
     if [ $? -ne 0 ]; then
         echo -e "${RED}Failed to create event $i${NC}"
