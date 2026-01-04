@@ -141,10 +141,53 @@ public class EventController {
                 .doOnError(error -> log.error("Failed to create event: {}", error.getMessage()));
     }
 
+    @Operation(
+        summary = "Create multiple events in bulk",
+        description = "Creates multiple events in a single request for improved throughput. " +
+                      "All events are persisted to both PostgreSQL and Elasticsearch. " +
+                      "Returns the created events with their generated IDs."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "201",
+            description = "Events created successfully",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = @Schema(implementation = Event.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request body"
+        )
+    })
+    @PostMapping(value = "/api/v1/events/bulk",
+                 consumes = MediaType.APPLICATION_JSON_VALUE,
+                 produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    public Flux<Event> createEventsBulk(
+        @RequestBody(description = "Events to create", required = true,
+                     content = @Content(schema = @Schema(implementation = BulkCreateEventsRequest.class)))
+        @org.springframework.web.bind.annotation.RequestBody BulkCreateEventsRequest request
+    ) {
+        log.info("Creating {} events in bulk", request.events().size());
+        Flux<Event> events = Flux.fromIterable(request.events())
+                .map(req -> new Event(LocalDateTime.now(), req.title(), req.description()));
+
+        return eventsService.saveEvents(events)
+                .doOnComplete(() -> log.info("Successfully completed bulk event creation"))
+                .doOnError(error -> log.error("Failed to create events in bulk: {}", error.getMessage()));
+    }
+
     public record CreateEventRequest(
         @Schema(description = "Event title", example = "System Deployment", required = true)
         String title,
         @Schema(description = "Event description", example = "Application deployed to production", required = false)
         String description
+    ) {}
+
+    public record BulkCreateEventsRequest(
+        @Schema(description = "List of events to create", required = true)
+        java.util.List<CreateEventRequest> events
     ) {}
 }
