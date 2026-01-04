@@ -1,9 +1,7 @@
 #!/bin/bash
 
-# Bulk event creation script with random permission assignment
-# Usage: ./bulk-create.sh --count <number_of_events> [--size <description_size_kb>]
-#   --count: Number of events to create (required)
-#   --size:  Size of description in KB (optional, default: 0.5 KB = 500 bytes)
+# Optimized parallel bulk event creation with real-time progress
+# Usage: ./bulk-create-v4.sh --count <number_of_events> [--size <description_size_kb>] [--batch <batch_size>] [--parallel <parallel_batches>]
 
 # Colors for output
 RED='\033[0;31m'
@@ -15,17 +13,20 @@ NC='\033[0m' # No Color
 # Default values
 EVENT_COUNT=""
 DESC_SIZE_KB=0.5
+BATCH_SIZE=100
+PARALLEL_BATCHES=10
 
 # Function to display usage
 usage() {
-    echo -e "${BLUE}Usage: $0 --count <number_of_events> [--size <description_size_kb>]${NC}"
-    echo -e "  ${GREEN}--count${NC}  Number of events to create (required)"
-    echo -e "  ${GREEN}--size${NC}   Size of description in KB (optional, default: 0.5 KB)"
+    echo -e "${BLUE}Usage: $0 --count <number_of_events> [--size <description_size_kb>] [--batch <batch_size>] [--parallel <parallel_batches>]${NC}"
+    echo -e "  ${GREEN}--count${NC}     Number of events to create (required)"
+    echo -e "  ${GREEN}--size${NC}      Size of description in KB (optional, default: 0.5 KB)"
+    echo -e "  ${GREEN}--batch${NC}     Number of events per bulk request (optional, default: 100)"
+    echo -e "  ${GREEN}--parallel${NC}  Number of parallel batch requests (optional, default: 10)"
     echo ""
     echo "Examples:"
-    echo "  $0 --count 10                # Create 10 events with 500-byte descriptions"
-    echo "  $0 --count 100 --size 2      # Create 100 events with 2KB descriptions"
-    echo "  $0 --size 1 --count 50       # Order doesn't matter"
+    echo "  $0 --count 100000 --batch 250 --parallel 20  # Fast: 100k events"
+    echo "  $0 --count 1000000 --batch 500 --parallel 50 # Very fast: 1M events"
     exit 1
 }
 
@@ -38,6 +39,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --size)
             DESC_SIZE_KB="$2"
+            shift 2
+            ;;
+        --batch)
+            BATCH_SIZE="$2"
+            shift 2
+            ;;
+        --parallel)
+            PARALLEL_BATCHES="$2"
             shift 2
             ;;
         -h|--help)
@@ -68,142 +77,92 @@ if ! [[ "$DESC_SIZE_KB" =~ ^[0-9]+\.?[0-9]*$ ]]; then
     exit 1
 fi
 
-# Calculate target description size in bytes
-DESC_SIZE_BYTES=$(awk "BEGIN {printf \"%.0f\", $DESC_SIZE_KB * 1024}")
+# Validate batch size
+if ! [[ "$BATCH_SIZE" =~ ^[0-9]+$ ]] || [ "$BATCH_SIZE" -le 0 ]; then
+    echo -e "${RED}Error: --batch must be a valid positive integer${NC}"
+    exit 1
+fi
 
-BASE_URL="http://localhost/api/v1"
+# Validate parallel batches
+if ! [[ "$PARALLEL_BATCHES" =~ ^[0-9]+$ ]] || [ "$PARALLEL_BATCHES" -le 0 ]; then
+    echo -e "${RED}Error: --parallel must be a valid positive integer${NC}"
+    exit 1
+fi
 
-# Function to generate random text of approximately specified size
-generate_description() {
-    local target_size=$1
-    local current_size=0
-    local description=""
+# Check if GNU parallel is installed
+if ! command -v parallel &> /dev/null; then
+    echo -e "${RED}Error: GNU parallel is not installed${NC}"
+    echo -e "${YELLOW}Install it with:${NC}"
+    echo -e "  ${GREEN}macOS:${NC}   brew install parallel"
+    echo -e "  ${GREEN}Ubuntu:${NC}  sudo apt-get install parallel"
+    echo -e "  ${GREEN}CentOS:${NC}  sudo yum install parallel"
+    exit 1
+fi
 
-    # Array of random words for more natural text
-    local words=("system" "process" "data" "event" "service" "application" "request" "response"
-                 "user" "session" "transaction" "operation" "function" "method" "component" "module"
-                 "interface" "implementation" "configuration" "parameter" "variable" "value" "result"
-                 "error" "exception" "handler" "controller" "repository" "entity" "model" "view"
-                 "network" "database" "cache" "queue" "stream" "buffer" "thread" "async" "sync"
-                 "authentication" "authorization" "validation" "encryption" "decryption" "encoding"
-                 "parsing" "serialization" "deserialization" "transformation" "mapping" "filtering")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-    local word_count=${#words[@]}
+# Calculate number of batches needed
+TOTAL_BATCHES=$(( (EVENT_COUNT + BATCH_SIZE - 1) / BATCH_SIZE ))
 
-    # Generate text until we reach approximately the target size
-    while [ $current_size -lt $target_size ]; do
-        # Get random word
-        local random_index=$((RANDOM % word_count))
-        local word="${words[$random_index]}"
+echo -e "${BLUE}Creating $EVENT_COUNT events using optimized parallel bulk API...${NC}"
+echo -e "${BLUE}Description size: ${DESC_SIZE_KB} KB${NC}"
+echo -e "${BLUE}Batch size: ${BATCH_SIZE} events per request${NC}"
+echo -e "${BLUE}Parallel batches: ${PARALLEL_BATCHES} concurrent requests${NC}"
+echo -e "${BLUE}Total batches: ${TOTAL_BATCHES}${NC}"
+echo ""
+echo -e "${YELLOW}Progress will update in real-time...${NC}"
+echo ""
 
-        # Add word and space
-        if [ -z "$description" ]; then
-            description="$word"
-        else
-            description="$description $word"
-        fi
+# Create a temporary file for results
+RESULTS_FILE=$(mktemp)
+trap "rm -f $RESULTS_FILE" EXIT
 
-        current_size=${#description}
-    done
+# Record start time
+START_TIME=$(date +%s)
 
-    echo "$description"
-}
+# Generate batch commands and run in parallel with progress bar
+# For each batch, calculate start event number
+for batch_id in $(seq 1 $TOTAL_BATCHES); do
+    start_num=$(( (batch_id - 1) * BATCH_SIZE + 1 ))
+    echo "$batch_id $start_num $BATCH_SIZE $EVENT_COUNT $DESC_SIZE_KB"
+done | parallel -j $PARALLEL_BATCHES --colsep ' ' --bar "$SCRIPT_DIR/create-batch-optimized.sh {1} {2} {3} {4} {5}" 2>/dev/null > "$RESULTS_FILE"
 
-echo -e "${BLUE}Creating $EVENT_COUNT events with random permissions...${NC}"
-echo -e "${BLUE}Description size: ${DESC_SIZE_KB} KB (approximately ${DESC_SIZE_BYTES} bytes)${NC}"
-echo
+# Record end time
+END_TIME=$(date +%s)
+DURATION=$((END_TIME - START_TIME))
 
-# Counters for permission distribution
-user1_count=0
-user2_count=0
-user3_count=0
-admin_count=0
+# Parse results
+# Format: batch_id|start_num|end_num|created
 events_created=0
+batches_completed=0
+failed_batches=0
 
-# Loop to create events
-for i in $(seq 1 $EVENT_COUNT); do
-    echo -e "${YELLOW}Creating event $i of $EVENT_COUNT...${NC}"
-
-    # Generate description
-    description=$(generate_description $DESC_SIZE_BYTES)
-
-    # Step 1: Create the event
-    response=$(curl -s -X POST "$BASE_URL/events" \
-        -H "Content-Type: application/json" \
-        -d "{\"title\": \"Event $i of $EVENT_COUNT (~${DESC_SIZE_KB}kb)\", \"description\": \"$description\"}")
-
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}Failed to create event $i${NC}"
-        continue
+while IFS='|' read -r batch_id start_num end_num created error; do
+    if [ -n "$error" ]; then
+        ((failed_batches++))
+    elif [ -n "$created" ] && [[ "$created" =~ ^[0-9]+$ ]]; then
+        events_created=$((events_created + created))
+        ((batches_completed++))
     fi
+done < "$RESULTS_FILE"
 
-    # Extract event ID from response
-    event_id=$(echo $response | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
-
-    if [ -z "$event_id" ]; then
-        echo -e "${RED}Failed to get event ID for event $i${NC}"
-        continue
-    fi
-
-    echo -e "${GREEN}Created event $i with ID: $event_id${NC}"
-    ((events_created++))
-
-    # Step 2: Assign permissions based on event ID (deterministic)
-    # user1: 1 in 1000 (IDs where ID % 1000 == 0)
-    # user2: 1 in 2000 (IDs where ID % 2000 == 0)
-    # user3: 1 in 3000 (IDs where ID % 3000 == 0)
-
-    # Grant permission to user1 (every 1000th ID)
-    if [ $((event_id % 1000)) -eq 0 ]; then
-        curl -s -X POST "$BASE_URL/permissions/bulk" \
-            -H "Content-Type: application/json" \
-            -d "{\"userId\": \"user1\", \"eventIds\": [$event_id]}" > /dev/null
-        ((user1_count++))
-        echo "  ✓ Granted permission to user1"
-    fi
-
-    # Grant permission to user2 (every 2000th ID)
-    if [ $((event_id % 2000)) -eq 0 ]; then
-        curl -s -X POST "$BASE_URL/permissions/bulk" \
-            -H "Content-Type: application/json" \
-            -d "{\"userId\": \"user2\", \"eventIds\": [$event_id]}" > /dev/null
-        ((user2_count++))
-        echo "  ✓ Granted permission to user2"
-    fi
-
-    # Grant permission to user3 (every 3000th ID)
-    if [ $((event_id % 3000)) -eq 0 ]; then
-        curl -s -X POST "$BASE_URL/permissions/bulk" \
-            -H "Content-Type: application/json" \
-            -d "{\"userId\": \"user3\", \"eventIds\": [$event_id]}" > /dev/null
-        ((user3_count++))
-        echo "  ✓ Granted permission to user3"
-    fi
-
-    # Admin always gets access
-    curl -s -X POST "$BASE_URL/permissions/bulk" \
-        -H "Content-Type: application/json" \
-        -d "{\"userId\": \"admin\", \"eventIds\": [$event_id]}" > /dev/null
-    ((admin_count++))
-    echo "  ✓ Granted permission to admin"
-
-    echo
-done
-
-# Calculate totals
-total_permissions=$((user1_count + user2_count + user3_count + admin_count))
+# Calculate events per second
+if [ $DURATION -gt 0 ]; then
+    events_per_second=$(awk "BEGIN {printf \"%.2f\", $events_created/$DURATION}")
+else
+    events_per_second="N/A (< 1 second)"
+fi
 
 # Display summary
+echo ""
 echo -e "${GREEN}================================${NC}"
 echo -e "${GREEN}Summary${NC}"
 echo -e "${GREEN}================================${NC}"
-echo -e "${BLUE}Events Created: ${GREEN}$events_created${NC}"
-echo
-echo -e "${BLUE}Permission Distribution:${NC}"
-echo -e "  user1:  $user1_count ($(awk "BEGIN {printf \"%.0f\", $user1_count/$events_created*100}")% of events)"
-echo -e "  user2:  $user2_count ($(awk "BEGIN {printf \"%.0f\", $user2_count/$events_created*100}")% of events)"
-echo -e "  user3:  $user3_count ($(awk "BEGIN {printf \"%.0f\", $user3_count/$events_created*100}")% of events)"
-echo -e "  admin:  $admin_count (100% of events)"
-echo
-echo -e "${BLUE}Total Permissions: ${GREEN}$total_permissions${NC}"
+echo -e "${BLUE}Events Created: ${GREEN}$events_created${NC} / $EVENT_COUNT"
+echo -e "${BLUE}Batches Completed: ${GREEN}$batches_completed${NC} / ${TOTAL_BATCHES}"
+if [ $failed_batches -gt 0 ]; then
+    echo -e "${BLUE}Failed Batches: ${RED}$failed_batches${NC}"
+fi
+echo -e "${BLUE}Duration: ${GREEN}${DURATION}s${NC}"
+echo -e "${BLUE}Throughput: ${GREEN}${events_per_second} events/sec${NC}"
 echo -e "${GREEN}================================${NC}"

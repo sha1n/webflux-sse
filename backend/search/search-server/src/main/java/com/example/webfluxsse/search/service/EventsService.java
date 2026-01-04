@@ -64,4 +64,43 @@ public class EventsService {
                     .map(EventMapper::toDto);
         }
     }
+
+    public Flux<Event> saveEvents(Flux<Event> events) {
+        return events
+                .map(EventMapper::toEntity)
+                .collectList()
+                .flatMapMany(entities -> {
+                    if (entities.isEmpty()) {
+                        log.warn("No events to save in bulk operation");
+                        return Flux.empty();
+                    }
+
+                    if (elasticsearchRepository != null) {
+                        log.info("Saving {} events with dual persistence", entities.size());
+                        return Flux.fromIterable(entities)
+                                .flatMap(entity -> eventRepository.save(entity))
+                                .collectList()
+                                .doOnSuccess(savedEntities -> log.info("Saved {} events to PostgreSQL", savedEntities.size()))
+                                .flatMapMany(savedEntities ->
+                                    Flux.fromIterable(savedEntities)
+                                            .flatMap(entity ->
+                                                elasticsearchRepository.save(entity)
+                                                        .onErrorResume(error -> {
+                                                            log.error("Failed to index event {} in Elasticsearch: {}",
+                                                                    entity.getId(), error.getMessage());
+                                                            return Mono.just(entity);
+                                                        })
+                                            )
+                                )
+                                .doOnComplete(() -> log.info("Completed indexing events in Elasticsearch"))
+                                .map(EventMapper::toDto);
+                    } else {
+                        log.info("Saving {} events with single persistence", entities.size());
+                        return Flux.fromIterable(entities)
+                                .flatMap(entity -> eventRepository.save(entity))
+                                .doOnComplete(() -> log.info("Saved {} events to PostgreSQL", entities.size()))
+                                .map(EventMapper::toDto);
+                    }
+                });
+    }
 }

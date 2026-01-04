@@ -10,6 +10,8 @@ spring:
       mode: never
   elasticsearch:
     uris: http://localhost:9200
+  codec:
+    max-in-memory-size: 50MB  # Allow large bulk request payloads
 
 server:
   port: 8081

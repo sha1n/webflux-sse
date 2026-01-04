@@ -335,9 +335,148 @@ class EventControllerIT {
 
         // Verify the first SSE event contains our posted event
         StepVerifier.create(eventStream)
-                .expectNextMatches(eventData -> 
-                    eventData.contains("Stream Test Event") && 
+                .expectNextMatches(eventData ->
+                    eventData.contains("Stream Test Event") &&
                     eventData.contains("Event to test SSE availability"))
                 .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Bulk POST API should create multiple events with 201 status and return all created events with IDs")
+    void shouldCreateMultipleEventsViaBulkPOST() {
+        String requestBody = """
+            {
+                "events": [
+                    {
+                        "title": "Bulk Event 1",
+                        "description": "First event in bulk creation"
+                    },
+                    {
+                        "title": "Bulk Event 2",
+                        "description": "Second event in bulk creation"
+                    },
+                    {
+                        "title": "Bulk Event 3",
+                        "description": "Third event in bulk creation"
+                    }
+                ]
+            }
+            """;
+
+        webTestClient.post()
+                .uri("/api/v1/events/bulk")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestBody)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBodyList(Event.class)
+                .hasSize(3)
+                .consumeWith(result -> {
+                    var events = result.getResponseBody();
+                    assert events != null;
+                    // Verify all events have IDs
+                    assert events.stream().allMatch(e -> e.id() != null);
+                    // Verify all expected titles are present (order may vary due to reactive processing)
+                    assert events.stream().anyMatch(e -> e.title().equals("Bulk Event 1"));
+                    assert events.stream().anyMatch(e -> e.title().equals("Bulk Event 2"));
+                    assert events.stream().anyMatch(e -> e.title().equals("Bulk Event 3"));
+                });
+    }
+
+    @Test
+    @DisplayName("Bulk POST API should persist all events to database and make them available via GET API")
+    void shouldPersistBulkEventsAndMakeThemAvailable() {
+        String requestBody = """
+            {
+                "events": [
+                    {
+                        "title": "Bulk Persistence Test 1",
+                        "description": "Testing bulk persistence 1"
+                    },
+                    {
+                        "title": "Bulk Persistence Test 2",
+                        "description": "Testing bulk persistence 2"
+                    }
+                ]
+            }
+            """;
+
+        // Create events via bulk POST
+        webTestClient.post()
+                .uri("/api/v1/events/bulk")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestBody)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBodyList(Event.class)
+                .hasSize(2);
+
+        // Verify both are available via GET
+        webTestClient.get()
+                .uri("/api/v1/events")
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBodyList(Event.class)
+                .hasSize(2)
+                .consumeWith(result -> {
+                    var events = result.getResponseBody();
+                    assert events != null;
+                    assert events.stream().anyMatch(e -> e.title().equals("Bulk Persistence Test 1"));
+                    assert events.stream().anyMatch(e -> e.title().equals("Bulk Persistence Test 2"));
+                });
+    }
+
+    @Test
+    @DisplayName("Bulk POST API should handle empty events list gracefully")
+    void shouldHandleEmptyBulkRequest() {
+        String requestBody = """
+            {
+                "events": []
+            }
+            """;
+
+        webTestClient.post()
+                .uri("/api/v1/events/bulk")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestBody)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBodyList(Event.class)
+                .hasSize(0);
+    }
+
+    @Test
+    @DisplayName("Bulk POST API should handle large batches efficiently")
+    void shouldHandleLargeBulkRequest() {
+        // Build a request with 100 events
+        StringBuilder jsonBuilder = new StringBuilder("{\"events\":[");
+        for (int i = 1; i <= 100; i++) {
+            if (i > 1) jsonBuilder.append(",");
+            jsonBuilder.append(String.format(
+                "{\"title\":\"Bulk Event %d\",\"description\":\"Description for event %d\"}",
+                i, i
+            ));
+        }
+        jsonBuilder.append("]}");
+
+        webTestClient.post()
+                .uri("/api/v1/events/bulk")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(jsonBuilder.toString())
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBodyList(Event.class)
+                .hasSize(100)
+                .consumeWith(result -> {
+                    var events = result.getResponseBody();
+                    assert events != null;
+                    // Verify first and last events
+                    assert events.stream().anyMatch(e -> e.title().equals("Bulk Event 1"));
+                    assert events.stream().anyMatch(e -> e.title().equals("Bulk Event 100"));
+                    // Verify all have IDs
+                    assert events.stream().allMatch(e -> e.id() != null);
+                });
     }
 }
