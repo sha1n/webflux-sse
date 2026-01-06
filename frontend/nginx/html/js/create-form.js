@@ -78,6 +78,7 @@ function CreateEventForm() {
                     <a href="/search.html">Search (Stream)</a>
                     <a href="/search-sse.html">Search (SSE)</a>
                     <a href="/permissions.html">Permissions</a>
+                    <a href="/user-permissions.html">User Permissions</a>
                 </div>
             <div className="form-container">
                 <p className="form-description">

@@ -132,3 +132,7 @@ pids
 *.pid
 *.seed
 *.pid.lock
+
+# Demo script runtime files
+demo/.pids/
+demo/logs/

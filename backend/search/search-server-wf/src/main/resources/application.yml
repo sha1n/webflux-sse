@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: search-service
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/eventdb
+    username: postgres
+    password: password
+    pool:
+      initial-size: 10
+      max-size: 80
+      max-idle-time: 30m
+      max-acquire-time: 10s
+      max-create-connection-time: 10s
+      validation-query: SELECT 1
+  sql:
+    init:
+      mode: never
+  elasticsearch:
+    uris: http://localhost:9200
+  codec:
+    max-in-memory-size: 50MB  # Allow large bulk request payloads
+
+server:
+  port: 8081
+  # Note: Netty event loop threads are auto-configured by Spring Boot
+  # Default is 2 * number of CPU cores, which is optimal for most workloads
+  # To customize, create a NettyReactiveWebServerFactory bean
+
+authorization-service:
+  base-url: http://localhost:8082
+  timeout: 5s
+  connect-timeout: 5s
+  read-timeout: 10s
+  write-timeout: 10s
+  max-connections: 500        # Maximum connections in pool
+  pending-acquire-timeout: 45s  # Max wait time for connection from pool
+  max-idle-time: 20s          # Close idle connections after this time
+  max-life-time: 60s          # Max lifetime of any connection
+
+logging:
+  level:
+    root: WARN
+    org.springframework.r2dbc: WARN
+    io.r2dbc.postgresql.QUERY: WARN
+    com.example.webfluxsse.search: WARN

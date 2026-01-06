@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: search-service-virtual
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://localhost:5432/eventdb
+    username: postgres
+    password: password
+    hikari:
+      minimum-idle: 10
+      maximum-pool-size: 80
+      connection-timeout: 3000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  jpa:
+    hibernate:
+      ddl-auto: none
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+  sql:
+    init:
+      mode: never
+  elasticsearch:
+    uris: http://localhost:9200
+  codec:
+    max-in-memory-size: 50MB  # Allow large bulk request payloads
+
+server:
+  port: 8083
+  tomcat:
+    threads:
+      max: 400          # Increased for virtual threads - allow more concurrent requests
+      min-spare: 20     # Keep minimum threads ready
+    max-connections: 10000  # Allow more concurrent connections
+    accept-count: 200   # Queue size for connections when all threads busy
+    connection-timeout: 20000  # 20 seconds connection timeout
+
+authorization-service:
+  base-url: http://localhost:8082
+  timeout: 5s
+  connect-timeout: 5s  # Connection establishment timeout for RestClient
+
+logging:
+  level:
+    root: WARN
+    org.springframework.jdbc: WARN
+    org.hibernate: WARN
+    com.example.virtualthreads.search: WARN

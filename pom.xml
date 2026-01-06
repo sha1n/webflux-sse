@@ -20,7 +20,8 @@
     <modules>
         <module>backend/search/search-service-api</module>
         <module>backend/authorization/authorization-service-api</module>
-        <module>backend/search/search-server</module>
+        <module>backend/search/search-server-wf</module>
+        <module>backend/search/search-server-vt</module>
         <module>backend/authorization/authorization-server</module>
     </modules>
 

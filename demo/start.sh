@@ -3,62 +3,11 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Source common functions
+source "$SCRIPT_DIR/common.sh"
 
 echo -e "${BLUE}🚀 Starting WebFlux SSE Application${NC}"
 echo
-
-# Function to check if Docker is running
-check_docker() {
-    if ! docker info > /dev/null 2>&1; then
-        echo -e "${RED}❌ Docker is not running. Please start Docker and try again.${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}✅ Docker is running${NC}"
-}
-
-
-# Function to start database
-start_database() {
-    echo -e "${BLUE}📦 Starting Docker containers (PostgreSQL, Elasticsearch, Nginx)...${NC}"
-
-    # Stop existing containers if they exist
-    docker-compose -f "$SCRIPT_DIR/docker-compose.yml" down > /dev/null 2>&1
-
-    # Start the database
-    if docker-compose -f "$SCRIPT_DIR/docker-compose.yml" up -d; then
-        echo -e "${GREEN}✅ Docker containers started${NC}"
-
-        # Wait for database to be ready
-        echo -e "${YELLOW}⏳ Waiting for database to be ready...${NC}"
-
-        # Wait up to 60 seconds for database to be ready
-        timeout=60
-        while [ $timeout -gt 0 ]; do
-            if docker-compose -f "$SCRIPT_DIR/docker-compose.yml" exec -T postgres pg_isready -U postgres -d eventdb > /dev/null 2>&1; then
-                echo -e "${GREEN}✅ Database is ready!${NC}"
-                break
-            fi
-            echo -n "."
-            sleep 2
-            timeout=$((timeout-2))
-        done
-
-        if [ $timeout -le 0 ]; then
-            echo -e "${RED}❌ Database failed to start within 60 seconds${NC}"
-            docker-compose -f "$SCRIPT_DIR/docker-compose.yml" logs postgres
-            exit 1
-        fi
-    else
-        echo -e "${RED}❌ Failed to start database${NC}"
-        exit 1
-    fi
-}
 
 # Function to start applications
 start_applications() {
@@ -70,49 +19,34 @@ start_applications() {
         exit 1
     fi
 
-    # Start authorization-server on port 8082
-    echo -e "${YELLOW}⏳ Starting authorization-server on port 8082...${NC}"
+    # JMX configuration for local monitoring
+    JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=localhost"
+
+    # Start authorization-server on port 8082 (JMX port 9010)
+    echo -e "${YELLOW}⏳ Starting authorization-server on port 8082 (JMX: 9010)...${NC}"
+    export MAVEN_OPTS="$JMX_OPTS -Dcom.sun.management.jmxremote.port=9010 -Dcom.sun.management.jmxremote.rmi.port=9010"
     mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/authorization/authorization-server spring-boot:run > /dev/null 2>&1 &
     AUTH_PID=$!
+    unset MAVEN_OPTS
 
-    # Start search-server on port 8081
-    echo -e "${YELLOW}⏳ Starting search-server on port 8081...${NC}"
-    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server spring-boot:run > /dev/null 2>&1 &
+    # Start search-server-wf on port 8081 (JMX port 9011)
+    echo -e "${YELLOW}⏳ Starting search-server-wf on port 8081 (JMX: 9011)...${NC}"
+    export MAVEN_OPTS="$JMX_OPTS -Dcom.sun.management.jmxremote.port=9011 -Dcom.sun.management.jmxremote.rmi.port=9011"
+    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server-wf spring-boot:run > /dev/null 2>&1 &
     SEARCH_PID=$!
+    unset MAVEN_OPTS
 
-    # Wait for authorization-server to start
-    echo -e "${YELLOW}⏳ Waiting for authorization-server to start...${NC}"
-    timeout=120
-    while [ $timeout -gt 0 ]; do
-        if curl -s http://localhost:8082/api/v1/permissions > /dev/null 2>&1; then
-            echo -e "${GREEN}✅ Authorization-server is running on port 8082!${NC}"
-            break
-        fi
-        echo -n "."
-        sleep 3
-        timeout=$((timeout-3))
-    done
+    # Start search-server-vt on port 8083 (JMX port 9012)
+    echo -e "${YELLOW}⏳ Starting search-server-vt on port 8083 (JMX: 9012)...${NC}"
+    export MAVEN_OPTS="$JMX_OPTS -Dcom.sun.management.jmxremote.port=9012 -Dcom.sun.management.jmxremote.rmi.port=9012"
+    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server-vt spring-boot:run > /dev/null 2>&1 &
+    SEARCH_VIRTUAL_PID=$!
+    unset MAVEN_OPTS
 
-    if [ $timeout -le 0 ]; then
-        echo -e "${YELLOW}⚠️ Authorization-server may still be starting. Check http://localhost:8082${NC}"
-    fi
-
-    # Wait for search-server to start
-    echo -e "${YELLOW}⏳ Waiting for search-server to start...${NC}"
-    timeout=120
-    while [ $timeout -gt 0 ]; do
-        if curl -s http://localhost:8081/api/v1/events > /dev/null 2>&1; then
-            echo -e "${GREEN}✅ Search-server is running on port 8081!${NC}"
-            break
-        fi
-        echo -n "."
-        sleep 3
-        timeout=$((timeout-3))
-    done
-
-    if [ $timeout -le 0 ]; then
-        echo -e "${YELLOW}⚠️ Search-server may still be starting. Check http://localhost:8081${NC}"
-    fi
+    # Wait for services to start
+    wait_for_service "authorization-server" "8082" "http://localhost:8082/api/v1/permissions"
+    wait_for_service "search-server-wf" "8081" "http://localhost:8081/api/v1/events"
+    wait_for_service "search-server-vt" "8083" "http://localhost:8083/api/v1/events"
 }
 
 # Function to display final information
@@ -123,21 +57,29 @@ show_info() {
     echo -e "${BLUE}📱 Application URLs:${NC}"
     echo -e "   🌐 Main UI (Nginx Gateway): ${YELLOW}http://localhost${NC}"
     echo -e "   📡 SSE Stream: ${YELLOW}http://localhost/api/v1/events${NC}"
-    echo -e "   🔍 Search: ${YELLOW}http://localhost/search.html${NC}"
+    echo -e "   🔍 Search (Reactive): ${YELLOW}http://localhost/search-sse.html${NC}"
+    echo -e "   🔍 Search (Virtual Threads): ${YELLOW}http://localhost/search-sse-virtual.html${NC}"
     echo -e "   🔐 Permissions: ${YELLOW}http://localhost/permissions.html${NC}"
     echo
     echo -e "${BLUE}🔧 Backend Services (Direct Access):${NC}"
-    echo -e "   Search Service: ${YELLOW}http://localhost:8081${NC}"
+    echo -e "   Search Service (Reactive): ${YELLOW}http://localhost:8081${NC}"
+    echo -e "   Search Service (Virtual Threads): ${YELLOW}http://localhost:8083${NC}"
     echo -e "   Authorization Service: ${YELLOW}http://localhost:8082${NC}"
     echo
     echo -e "${BLUE}📚 API Documentation:${NC}"
-    echo -e "   Search Service API: ${YELLOW}http://localhost:8081/swagger-ui.html${NC}"
+    echo -e "   Search Service API (Reactive): ${YELLOW}http://localhost:8081/swagger-ui.html${NC}"
+    echo -e "   Search Service API (Virtual Threads): ${YELLOW}http://localhost:8083/swagger-ui.html${NC}"
     echo -e "   Authorization Service API: ${YELLOW}http://localhost:8082/swagger-ui.html${NC}"
     echo
     echo -e "${BLUE}🗃️ Database Connection:${NC}"
     echo -e "   🔗 Host: ${YELLOW}localhost:5432${NC}"
     echo -e "   📂 Database: ${YELLOW}eventdb${NC}"
     echo -e "   👤 User: ${YELLOW}postgres${NC}"
+    echo
+    echo -e "${BLUE}📊 JMX Monitoring:${NC}"
+    echo -e "   Authorization Server: ${YELLOW}localhost:9010${NC}"
+    echo -e "   Search Server (WebFlux): ${YELLOW}localhost:9011${NC}"
+    echo -e "   Search Server (Virtual Threads): ${YELLOW}localhost:9012${NC}"
     echo
     echo -e "${BLUE}📋 Available Commands:${NC}"
     echo -e "   🛑 Stop all services: ${YELLOW}./stop.sh${NC}"
@@ -148,23 +90,6 @@ show_info() {
     echo -e "${GREEN}Press Ctrl+C to stop all applications${NC}"
 }
 
-# Function to cleanup on exit
-cleanup() {
-    echo
-    echo -e "${YELLOW}🧹 Cleaning up...${NC}"
-    if [ ! -z "$AUTH_PID" ]; then
-        kill $AUTH_PID > /dev/null 2>&1
-    fi
-    if [ ! -z "$SEARCH_PID" ]; then
-        kill $SEARCH_PID > /dev/null 2>&1
-    fi
-    pkill -f "authorization-server.*spring-boot:run" > /dev/null 2>&1
-    pkill -f "search-server.*spring-boot:run" > /dev/null 2>&1
-    docker-compose -f "$SCRIPT_DIR/docker-compose.yml" down > /dev/null 2>&1
-    echo -e "${GREEN}✅ Cleanup complete${NC}"
-    exit 0
-}
-
 # Set trap to cleanup on script exit
 trap cleanup INT TERM
 
@@ -173,9 +98,20 @@ check_docker
 "$SCRIPT_DIR/../frontend/configure-nginx-host.sh"
 start_database
 start_applications
+start_jvisualvm
 show_info
 
-# Keep the script running
-if [ ! -z "$AUTH_PID" ] || [ ! -z "$SEARCH_PID" ]; then
-    wait
-fi
+# Keep the script running - wait for services
+# This will exit when all services are stopped (e.g., by stop.sh or Ctrl+C)
+# Check for both Maven processes (spring-boot:run) and Java processes (Application classes)
+while pgrep -f "authorization-server.*spring-boot:run" > /dev/null || \
+      pgrep -f "search-server-wf.*spring-boot:run" > /dev/null || \
+      pgrep -f "search-server-vt.*spring-boot:run" > /dev/null || \
+      pgrep -f "AuthorizationServiceApplication" > /dev/null || \
+      pgrep -f "SearchServiceWfApplication\|SearchServiceVtApplication" > /dev/null; do
+    sleep 2
+done
+
+echo
+echo -e "${YELLOW}⚠️  All services have stopped${NC}"
+exit 0

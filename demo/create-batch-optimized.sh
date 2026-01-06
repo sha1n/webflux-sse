@@ -1,20 +1,30 @@
 #!/bin/bash
 
 # Optimized single batch creation script with faster description generation
-# Usage: ./create-batch-optimized.sh <batch_id> <start_event_num> <batch_size> <total_count> <desc_size_kb>
+# Usage: ./create-batch-optimized.sh <batch_id> <start_event_num> <batch_size> <total_count> <desc_size_kb> <stack>
 
 BATCH_ID=$1
 START_NUM=$2
 BATCH_SIZE=$3
 TOTAL_COUNT=$4
 DESC_SIZE_KB=$5
+STACK=$6
 
-if [ -z "$BATCH_ID" ] || [ -z "$START_NUM" ] || [ -z "$BATCH_SIZE" ] || [ -z "$TOTAL_COUNT" ] || [ -z "$DESC_SIZE_KB" ]; then
+if [ -z "$BATCH_ID" ] || [ -z "$START_NUM" ] || [ -z "$BATCH_SIZE" ] || [ -z "$TOTAL_COUNT" ] || [ -z "$DESC_SIZE_KB" ] || [ -z "$STACK" ]; then
     echo "Error: Missing required arguments"
     exit 1
 fi
 
-BASE_URL="http://localhost/api/v1"
+# Set API path based on stack
+if [[ "$STACK" == "wf" ]]; then
+    API_PATH="/api-reactive/v1"
+else
+    API_PATH="/api-virtual/v1"
+fi
+
+# Events use stack-specific API, permissions always use authorization service
+BASE_URL="http://localhost${API_PATH}"
+AUTH_URL="http://localhost/api/v1"
 
 # Calculate target description size in bytes
 DESC_SIZE_BYTES=$(awk "BEGIN {printf \"%.0f\", $DESC_SIZE_KB * 1024}")
@@ -118,28 +128,28 @@ if [ $? -eq 0 ]; then
         # Grant permissions in bulk (one request per user with their event IDs)
         if [ ${#user1_ids[@]} -gt 0 ]; then
             user1_json=$(printf '%s\n' "${user1_ids[@]}" | jq -R . | jq -s -c .)
-            curl -s -X POST "$BASE_URL/permissions/bulk" \
+            curl -s -X POST "$AUTH_URL/permissions/bulk" \
                 -H "Content-Type: application/json" \
                 -d "{\"userId\":\"user1\",\"eventIds\":$user1_json}" > /dev/null
         fi
 
         if [ ${#user2_ids[@]} -gt 0 ]; then
             user2_json=$(printf '%s\n' "${user2_ids[@]}" | jq -R . | jq -s -c .)
-            curl -s -X POST "$BASE_URL/permissions/bulk" \
+            curl -s -X POST "$AUTH_URL/permissions/bulk" \
                 -H "Content-Type: application/json" \
                 -d "{\"userId\":\"user2\",\"eventIds\":$user2_json}" > /dev/null
         fi
 
         if [ ${#user3_ids[@]} -gt 0 ]; then
             user3_json=$(printf '%s\n' "${user3_ids[@]}" | jq -R . | jq -s -c .)
-            curl -s -X POST "$BASE_URL/permissions/bulk" \
+            curl -s -X POST "$AUTH_URL/permissions/bulk" \
                 -H "Content-Type: application/json" \
                 -d "{\"userId\":\"user3\",\"eventIds\":$user3_json}" > /dev/null
         fi
 
         # Admin gets all events (always has IDs)
         admin_json=$(printf '%s\n' "${admin_ids[@]}" | jq -R . | jq -s -c .)
-        curl -s -X POST "$BASE_URL/permissions/bulk" \
+        curl -s -X POST "$AUTH_URL/permissions/bulk" \
             -H "Content-Type: application/json" \
             -d "{\"userId\":\"admin\",\"eventIds\":$admin_json}" > /dev/null
     fi
