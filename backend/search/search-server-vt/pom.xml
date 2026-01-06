@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>search-server-vt</artifactId>
-    <name>search-server-virtual</name>
+    <name>search-server-vt</name>
     <description>Virtual-thread-based events and search server</description>
 
     <dependencies>

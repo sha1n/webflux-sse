@@ -86,21 +86,21 @@ start_applications() {
     AUTH_PID=$!
     unset JAVA_TOOL_OPTIONS
 
-    # Start search-server (reactive) on port 8081 with 1GB RAM
-    echo -e "${YELLOW}⏳ Starting search-server (WebFlux) on port 8081 (1GB RAM)...${NC}"
-    echo -e "${BLUE}   Log file: $LOG_DIR/search-server.log${NC}"
+    # Start search-server-wf (reactive) on port 8081 with 1GB RAM
+    echo -e "${YELLOW}⏳ Starting search-server-wf (WebFlux) on port 8081 (1GB RAM)...${NC}"
+    echo -e "${BLUE}   Log file: $LOG_DIR/search-server-wf.log${NC}"
     export JAVA_TOOL_OPTIONS="-Xms1024m -Xmx1024m"
-    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server spring-boot:run \
-        > "$LOG_DIR/search-server.log" 2>&1 &
+    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server-wf spring-boot:run \
+        > "$LOG_DIR/search-server-wf.log" 2>&1 &
     SEARCH_PID=$!
     unset JAVA_TOOL_OPTIONS
 
-    # Start search-server-virtual on port 8083 with 1GB RAM
-    echo -e "${YELLOW}⏳ Starting search-server-virtual (Virtual Threads) on port 8083 (1GB RAM)...${NC}"
-    echo -e "${BLUE}   Log file: $LOG_DIR/search-server-virtual.log${NC}"
+    # Start search-server-vt on port 8083 with 1GB RAM
+    echo -e "${YELLOW}⏳ Starting search-server-vt (Virtual Threads) on port 8083 (1GB RAM)...${NC}"
+    echo -e "${BLUE}   Log file: $LOG_DIR/search-server-vt.log${NC}"
     export JAVA_TOOL_OPTIONS="-Xms1024m -Xmx1024m"
-    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server-virtual spring-boot:run \
-        > "$LOG_DIR/search-server-virtual.log" 2>&1 &
+    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server-vt spring-boot:run \
+        > "$LOG_DIR/search-server-vt.log" 2>&1 &
     SEARCH_VIRTUAL_PID=$!
     unset JAVA_TOOL_OPTIONS
 
@@ -121,12 +121,12 @@ start_applications() {
         echo -e "${YELLOW}⚠️ Authorization-server may still be starting. Check logs: tail -f $LOG_DIR/authorization-server.log${NC}"
     fi
 
-    # Wait for search-server to start
-    echo -e "${YELLOW}⏳ Waiting for search-server (WebFlux) to start...${NC}"
+    # Wait for search-server-wf to start
+    echo -e "${YELLOW}⏳ Waiting for search-server-wf (WebFlux) to start...${NC}"
     timeout=120
     while [ $timeout -gt 0 ]; do
         if curl -s http://localhost:8081/api/v1/events > /dev/null 2>&1; then
-            echo -e "${GREEN}✅ Search-server (WebFlux) is running on port 8081!${NC}"
+            echo -e "${GREEN}✅ search-server-wf (WebFlux) is running on port 8081!${NC}"
             break
         fi
         echo -n "."
@@ -135,15 +135,15 @@ start_applications() {
     done
 
     if [ $timeout -le 0 ]; then
-        echo -e "${YELLOW}⚠️ Search-server may still be starting. Check logs: tail -f $LOG_DIR/search-server.log${NC}"
+        echo -e "${YELLOW}⚠️ search-server-wf may still be starting. Check logs: tail -f $LOG_DIR/search-server-wf.log${NC}"
     fi
 
-    # Wait for search-server-virtual to start
-    echo -e "${YELLOW}⏳ Waiting for search-server-virtual (Virtual Threads) to start...${NC}"
+    # Wait for search-server-vt to start
+    echo -e "${YELLOW}⏳ Waiting for search-server-vt (Virtual Threads) to start...${NC}"
     timeout=120
     while [ $timeout -gt 0 ]; do
         if curl -s http://localhost:8083/api/v1/events > /dev/null 2>&1; then
-            echo -e "${GREEN}✅ Search-server-virtual (Virtual Threads) is running on port 8083!${NC}"
+            echo -e "${GREEN}✅ search-server-vt (Virtual Threads) is running on port 8083!${NC}"
             break
         fi
         echo -n "."
@@ -152,7 +152,7 @@ start_applications() {
     done
 
     if [ $timeout -le 0 ]; then
-        echo -e "${YELLOW}⚠️ Search-server-virtual may still be starting. Check logs: tail -f $LOG_DIR/search-server-virtual.log${NC}"
+        echo -e "${YELLOW}⚠️ search-server-vt may still be starting. Check logs: tail -f $LOG_DIR/search-server-vt.log${NC}"
     fi
 }
 
@@ -173,9 +173,9 @@ show_info() {
     echo -e "   Search Service (Virtual Threads): ${YELLOW}http://localhost:8083${NC}"
     echo
     echo -e "${BLUE}📋 Log Files:${NC}"
-    echo -e "   Search Service (WebFlux): ${YELLOW}tail -f $LOG_DIR/search-server.log${NC}"
+    echo -e "   Search Service (WebFlux): ${YELLOW}tail -f $LOG_DIR/search-server-wf.log${NC}"
     echo -e "   Authorization Service: ${YELLOW}tail -f $LOG_DIR/authorization-server.log${NC}"
-    echo -e "   Search Service (VT): ${YELLOW}tail -f $LOG_DIR/search-server-virtual.log${NC}"
+    echo -e "   Search Service (VT): ${YELLOW}tail -f $LOG_DIR/search-server-vt.log${NC}"
     echo -e "   Monitor script: ${YELLOW}./monitor-logs.sh${NC}"
     echo
     echo -e "${BLUE}📋 Available Commands:${NC}"
@@ -199,8 +199,8 @@ cleanup() {
         kill $SEARCH_VIRTUAL_PID > /dev/null 2>&1
     fi
     pkill -f "authorization-server.*spring-boot:run" > /dev/null 2>&1
-    pkill -f "search-server.*spring-boot:run" > /dev/null 2>&1
-    pkill -f "search-server-virtual.*spring-boot:run" > /dev/null 2>&1
+    pkill -f "search-server-wf.*spring-boot:run" > /dev/null 2>&1
+    pkill -f "search-server-vt.*spring-boot:run" > /dev/null 2>&1
     docker-compose -f "$SCRIPT_DIR/docker-compose.yml" down > /dev/null 2>&1
     echo -e "${GREEN}✅ Cleanup complete${NC}"
     exit 0
@@ -216,7 +216,17 @@ start_database
 start_applications
 show_info
 
-# Keep the script running
-if [ ! -z "$AUTH_PID" ] || [ ! -z "$SEARCH_PID" ]; then
-    wait
-fi
+# Keep the script running - wait for services
+# This will exit when all services are stopped (e.g., by stop.sh or Ctrl+C)
+# Check for both Maven processes (spring-boot:run) and Java processes (Application classes)
+while pgrep -f "authorization-server.*spring-boot:run" > /dev/null || \
+      pgrep -f "search-server-wf.*spring-boot:run" > /dev/null || \
+      pgrep -f "search-server-vt.*spring-boot:run" > /dev/null || \
+      pgrep -f "AuthorizationServiceApplication" > /dev/null || \
+      pgrep -f "SearchServiceWfApplication\|SearchServiceVtApplication" > /dev/null; do
+    sleep 2
+done
+
+echo
+echo -e "${YELLOW}⚠️  All services have stopped${NC}"
+exit 0

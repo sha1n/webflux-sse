@@ -16,28 +16,32 @@ echo
 # Stop authorization-server
 echo -e "${YELLOW}🔧 Stopping authorization-server...${NC}"
 pkill -f "authorization-server.*spring-boot:run" > /dev/null 2>&1
+pkill -f "AuthorizationServiceApplication" > /dev/null 2>&1
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ Authorization-server stopped${NC}"
 else
     echo -e "${YELLOW}ℹ️  No running authorization-server found${NC}"
 fi
 
-# Stop search-server (reactive)
-echo -e "${YELLOW}🔧 Stopping search-server (WebFlux)...${NC}"
-pkill -f "search-server[^-].*spring-boot:run" > /dev/null 2>&1
+# Stop search-server-wf (reactive)
+echo -e "${YELLOW}🔧 Stopping search-server-wf (WebFlux)...${NC}"
+pkill -f "search-server-wf.*spring-boot:run" > /dev/null 2>&1
+# Also stop Java processes for search-server-wf
+pkill -f "search-server-wf/.*SearchServiceWfApplication" > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ Search-server (WebFlux) stopped${NC}"
+    echo -e "${GREEN}✅ search-server-wf (WebFlux) stopped${NC}"
 else
-    echo -e "${YELLOW}ℹ️  No running search-server (WebFlux) found${NC}"
+    echo -e "${YELLOW}ℹ️  No running search-server-wf (WebFlux) found${NC}"
 fi
 
-# Stop search-server-virtual
-echo -e "${YELLOW}🔧 Stopping search-server-virtual (Virtual Threads)...${NC}"
-pkill -f "search-server-virtual.*spring-boot:run" > /dev/null 2>&1
+# Stop search-server-vt
+echo -e "${YELLOW}🔧 Stopping search-server-vt (Virtual Threads)...${NC}"
+pkill -f "search-server-vt.*spring-boot:run" > /dev/null 2>&1
+pkill -f "search-server-vt/.*SearchServiceVtApplication" > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ Search-server-virtual (Virtual Threads) stopped${NC}"
+    echo -e "${GREEN}✅ search-server-vt (Virtual Threads) stopped${NC}"
 else
-    echo -e "${YELLOW}ℹ️  No running search-server-virtual found${NC}"
+    echo -e "${YELLOW}ℹ️  No running search-server-vt found${NC}"
 fi
 
 # Stop Docker containers

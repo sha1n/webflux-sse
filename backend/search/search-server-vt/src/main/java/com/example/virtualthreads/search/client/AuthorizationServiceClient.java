@@ -20,13 +20,11 @@ public class AuthorizationServiceClient {
     private final RestClient restClient;
     private final Duration timeout;
 
-    public AuthorizationServiceClient(@Value("${authorization-service.base-url}") String baseUrl,
+    public AuthorizationServiceClient(RestClient restClient,
                                       @Value("${authorization-service.timeout:5s}") Duration timeout) {
-        this.restClient = RestClient.builder()
-                .baseUrl(baseUrl)
-                .build();
+        this.restClient = restClient;
         this.timeout = timeout;
-        log.info("AuthorizationServiceClient initialized with baseUrl: {}, timeout: {}", baseUrl, timeout);
+        log.info("AuthorizationServiceClient initialized with timeout: {}", timeout);
     }
 
     public BatchPermissionCheckResponse checkBatchPermissions(List<Long> eventIds, String userId) {

@@ -5,7 +5,7 @@ import org.springframework.data.elasticsearch.repository.config.EnableElasticsea
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @Configuration
-@EnableJpaRepositories(basePackages = "com.example.webfluxsse.search.repository.jpa")
-@EnableElasticsearchRepositories(basePackages = "com.example.webfluxsse.search.repository.elasticsearch")
+@EnableJpaRepositories(basePackages = "com.example.virtualthreads.search.repository.jpa")
+@EnableElasticsearchRepositories(basePackages = "com.example.virtualthreads.search.repository.elasticsearch")
 public class DatabaseConfig {
 }

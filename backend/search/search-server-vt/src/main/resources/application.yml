@@ -33,10 +33,11 @@ server:
 authorization-service:
   base-url: http://localhost:8082
   timeout: 5s
+  connect-timeout: 5s  # Connection establishment timeout for RestClient
 
 logging:
   level:
     root: WARN
     org.springframework.jdbc: WARN
     org.hibernate: WARN
-    com.example.webfluxsse.search: WARN
+    com.example.virtualthreads.search: WARN

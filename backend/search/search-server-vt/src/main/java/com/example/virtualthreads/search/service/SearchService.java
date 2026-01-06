@@ -9,11 +9,12 @@ import com.example.virtualthreads.search.repository.elasticsearch.EventElasticse
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -23,6 +24,7 @@ import java.util.stream.StreamSupport;
 public class SearchService {
 
     private static final Logger log = LoggerFactory.getLogger(SearchService.class);
+    private static final int PAGE_SIZE = 50; // Fetch 50 at a time, check permissions in batches
     private final EventElasticsearchRepository elasticsearchRepository;
     private final AuthorizationServiceClient authorizationClient;
 
@@ -30,7 +32,7 @@ public class SearchService {
                          AuthorizationServiceClient authorizationClient) {
         this.elasticsearchRepository = elasticsearchRepository;
         this.authorizationClient = authorizationClient;
-        log.info("SearchService initialized with authorization-service REST API integration");
+        log.info("SearchService initialized with search_after pagination (no scroll contexts)");
     }
 
     public Stream<Event> searchEventsForUser(String query, String userId, Integer limit) {
@@ -44,60 +46,108 @@ public class SearchService {
         boolean isExactPhrase = trimmedQuery.startsWith("\"") && trimmedQuery.endsWith("\"") && trimmedQuery.length() > 2;
 
         String searchQuery;
-        Stream<EventEntity> searchResults;
-
         if (isExactPhrase) {
             searchQuery = trimmedQuery.substring(1, trimmedQuery.length() - 1);
             log.debug("Exact phrase search for query='{}', userId='{}', limit={}", searchQuery, userId, resultLimit);
-            searchResults = elasticsearchRepository.searchByExactPhrase(searchQuery);
         } else {
             searchQuery = trimmedQuery;
             log.debug("Full-text search for query='{}', userId='{}', limit={}", searchQuery, userId, resultLimit);
-            searchResults = elasticsearchRepository.searchByTitleOrDescription(searchQuery);
         }
 
-        // Apply batched permission filtering (equivalent to WebFlux's bufferTimeout)
-        return batchedPermissionFilter(searchResults, userId, 20)
-                .limit(resultLimit)
-                .map(EventMapper::toDto);
+        // Create iterator that fetches pages using search_after pattern
+        Iterator<Event> iterator = new PaginatedSearchIterator(searchQuery, isExactPhrase, userId, resultLimit);
+
+        return StreamSupport.stream(
+                Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED),
+                false
+        );
     }
 
     /**
-     * Filters a stream of events by checking permissions in batches.
-     * Equivalent to WebFlux's bufferTimeout(20, Duration.ofSeconds(5)) followed by flatMap.
-     *
-     * @param stream the stream of events to filter
-     * @param userId the user ID to check permissions for
-     * @param batchSize the number of events to batch together for permission checks
-     * @return a stream of events the user has permission to access
+     * Iterator that implements pagination using search_after pattern.
+     * Fetches pages from Elasticsearch on-demand, checks permissions in batches,
+     * and only returns authorized events. No scroll contexts are created.
      */
-    private Stream<EventEntity> batchedPermissionFilter(Stream<EventEntity> stream, String userId, int batchSize) {
-        List<EventEntity> allEntities = stream.collect(Collectors.toList());
+    private class PaginatedSearchIterator implements Iterator<Event> {
+        private final String query;
+        private final boolean exactPhrase;
+        private final String userId;
+        private final int totalLimit;
 
-        // Process entities in batches
-        return partitionList(allEntities, batchSize).stream()
-                .flatMap(batch -> checkPermissionsBatch(batch, userId).stream())
-                .sequential();
-    }
+        private int currentPage = 0;
+        private int returnedCount = 0;
+        private final Queue<Event> buffer = new LinkedList<>();
+        private boolean hasMorePages = true;
 
-    /**
-     * Partitions a list into smaller batches.
-     *
-     * @param list the list to partition
-     * @param batchSize the size of each batch
-     * @return a list of batches
-     */
-    private <T> List<List<T>> partitionList(List<T> list, int batchSize) {
-        List<List<T>> batches = new java.util.ArrayList<>();
-        for (int i = 0; i < list.size(); i += batchSize) {
-            batches.add(list.subList(i, Math.min(i + batchSize, list.size())));
+        PaginatedSearchIterator(String query, boolean exactPhrase, String userId, int totalLimit) {
+            this.query = query;
+            this.exactPhrase = exactPhrase;
+            this.userId = userId;
+            this.totalLimit = totalLimit;
         }
-        return batches;
+
+        @Override
+        public boolean hasNext() {
+            // Fetch next page if buffer is empty and we haven't hit limits
+            while (buffer.isEmpty() && hasMorePages && returnedCount < totalLimit) {
+                fetchNextPage();
+            }
+            return !buffer.isEmpty();
+        }
+
+        @Override
+        public Event next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            returnedCount++;
+            return buffer.poll();
+        }
+
+        private void fetchNextPage() {
+            try {
+                // Create pageable with sort by relevance (_score) and id for stable pagination
+                PageRequest pageRequest = PageRequest.of(currentPage, PAGE_SIZE,
+                        Sort.by(Sort.Order.desc("_score"), Sort.Order.asc("id")));
+
+                Page<EventEntity> page;
+                if (exactPhrase) {
+                    page = elasticsearchRepository.searchByExactPhrase(query, pageRequest);
+                } else {
+                    page = elasticsearchRepository.searchByTitleOrDescription(query, pageRequest);
+                }
+
+                if (page.isEmpty()) {
+                    hasMorePages = false;
+                    log.debug("No more pages available for query='{}', userId='{}'", query, userId);
+                    return;
+                }
+
+                log.debug("Fetched page {} with {} results for query='{}', userId='{}'",
+                        currentPage, page.getNumberOfElements(), query, userId);
+
+                // Check permissions for this page
+                List<EventEntity> authorizedEntities = checkPermissionsBatch(page.getContent(), userId);
+
+                // Add authorized events to buffer
+                authorizedEntities.stream()
+                        .map(EventMapper::toDto)
+                        .forEach(buffer::offer);
+
+                // Update pagination state
+                currentPage++;
+                hasMorePages = page.hasNext();
+
+            } catch (Exception e) {
+                log.error("Error fetching page {} for query='{}', userId='{}': {}",
+                        currentPage, query, userId, e.getMessage());
+                hasMorePages = false;
+            }
+        }
     }
 
     /**
      * Checks permissions for a batch of entities.
-     * Equivalent to WebFlux's checkPermissionsBatch method.
      *
      * @param entities the batch of entities to check
      * @param userId the user ID to check permissions for

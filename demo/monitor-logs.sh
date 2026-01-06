@@ -15,11 +15,11 @@ MODE=${1:-both}
 
 case $MODE in
     search)
-        echo -e "${BLUE}Monitoring search-server logs...${NC}"
+        echo -e "${BLUE}Monitoring search services logs...${NC}"
         echo -e "${YELLOW}Process info:${NC}"
-        ps aux | grep "search-server.*spring-boot:run" | grep -v grep | head -1
+        ps aux | grep -E "search-server-(wf|vt).*spring-boot:run" | grep -v grep | head -2
         echo ""
-        jps -v | grep SearchServiceApplication
+        jps -v | grep -E "SearchService(Wf|Vt)Application"
         ;;
     auth)
         echo -e "${BLUE}Monitoring authorization-server logs...${NC}"
@@ -31,13 +31,25 @@ case $MODE in
     both)
         echo -e "${BLUE}=== Service Status ===${NC}"
         echo ""
-        echo -e "${CYAN}Search Server (port 8081):${NC}"
-        SEARCH_PID=$(jps -l | grep SearchServiceApplication | awk '{print $1}')
-        if [ -n "$SEARCH_PID" ]; then
-            echo -e "${GREEN}✓ Running (PID: $SEARCH_PID)${NC}"
-            ps -p $SEARCH_PID -o pid,vsz,rss,%mem,command | tail -1 | awk '{printf "  Memory: RSS=%sMB, VSZ=%sMB, MEM=%s%%\n", $3/1024, $2/1024, $4}'
+        echo -e "${CYAN}Search Server WF (port 8081):${NC}"
+        SEARCH_WF_PID=$(jps -l | grep SearchServiceWfApplication | awk '{print $1}')
+        if [ -n "$SEARCH_WF_PID" ]; then
+            echo -e "${GREEN}✓ Running (PID: $SEARCH_WF_PID)${NC}"
+            ps -p $SEARCH_WF_PID -o pid,vsz,rss,%mem,command | tail -1 | awk '{printf "  Memory: RSS=%sMB, VSZ=%sMB, MEM=%s%%\n", $3/1024, $2/1024, $4}'
             # Show JVM heap settings
-            jps -v | grep SearchServiceApplication | grep -o "\-Xmx[^ ]*" | sed 's/-Xmx/  Heap Max: /' || echo "  Heap Max: Not specified"
+            jps -v | grep SearchServiceWfApplication | grep -o "\-Xmx[^ ]*" | sed 's/-Xmx/  Heap Max: /' || echo "  Heap Max: Not specified"
+        else
+            echo -e "${RED}✗ Not running${NC}"
+        fi
+        echo ""
+
+        echo -e "${CYAN}Search Server VT (port 8083):${NC}"
+        SEARCH_VT_PID=$(jps -l | grep SearchServiceVtApplication | awk '{print $1}')
+        if [ -n "$SEARCH_VT_PID" ]; then
+            echo -e "${GREEN}✓ Running (PID: $SEARCH_VT_PID)${NC}"
+            ps -p $SEARCH_VT_PID -o pid,vsz,rss,%mem,command | tail -1 | awk '{printf "  Memory: RSS=%sMB, VSZ=%sMB, MEM=%s%%\n", $3/1024, $2/1024, $4}'
+            # Show JVM heap settings
+            jps -v | grep SearchServiceVtApplication | grep -o "\-Xmx[^ ]*" | sed 's/-Xmx/  Heap Max: /' || echo "  Heap Max: Not specified"
         else
             echo -e "${RED}✗ Not running${NC}"
         fi

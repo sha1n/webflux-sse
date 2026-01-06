@@ -75,14 +75,14 @@ start_applications() {
     mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/authorization/authorization-server spring-boot:run > /dev/null 2>&1 &
     AUTH_PID=$!
 
-    # Start search-server on port 8081
-    echo -e "${YELLOW}⏳ Starting search-server on port 8081...${NC}"
-    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server spring-boot:run > /dev/null 2>&1 &
+    # Start search-server-wf on port 8081
+    echo -e "${YELLOW}⏳ Starting search-server-wf on port 8081...${NC}"
+    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server-wf spring-boot:run > /dev/null 2>&1 &
     SEARCH_PID=$!
     
-    # Start search-server-virtual on port 8083
-    echo -e "${YELLOW}⏳ Starting search-server-virtual on port 8083...${NC}"
-    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server-virtual spring-boot:run > /dev/null 2>&1 &
+    # Start search-server-vt on port 8083
+    echo -e "${YELLOW}⏳ Starting search-server-vt on port 8083...${NC}"
+    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server-vt spring-boot:run > /dev/null 2>&1 &
     SEARCH_VIRTUAL_PID=$!
 
     # Wait for authorization-server to start
@@ -102,12 +102,12 @@ start_applications() {
         echo -e "${YELLOW}⚠️ Authorization-server may still be starting. Check http://localhost:8082${NC}"
     fi
 
-    # Wait for search-server to start
-    echo -e "${YELLOW}⏳ Waiting for search-server to start...${NC}"
+    # Wait for search-server-wf to start
+    echo -e "${YELLOW}⏳ Waiting for search-server-wf to start...${NC}"
     timeout=120
     while [ $timeout -gt 0 ]; do
         if curl -s http://localhost:8081/api/v1/events > /dev/null 2>&1; then
-            echo -e "${GREEN}✅ Search-server is running on port 8081!${NC}"
+            echo -e "${GREEN}✅ search-server-wf is running on port 8081!${NC}"
             break
         fi
         echo -n "."
@@ -116,15 +116,15 @@ start_applications() {
     done
 
     if [ $timeout -le 0 ]; then
-        echo -e "${YELLOW}⚠️ Search-server may still be starting. Check http://localhost:8081${NC}"
+        echo -e "${YELLOW}⚠️ search-server-wf may still be starting. Check http://localhost:8081${NC}"
     fi
     
-    # Wait for search-server-virtual to start
-    echo -e "${YELLOW}⏳ Waiting for search-server-virtual to start...${NC}"
+    # Wait for search-server-vt to start
+    echo -e "${YELLOW}⏳ Waiting for search-server-vt to start...${NC}"
     timeout=120
     while [ $timeout -gt 0 ]; do
         if curl -s http://localhost:8083/api/v1/events > /dev/null 2>&1; then
-            echo -e "${GREEN}✅ Search-server-virtual is running on port 8083!${NC}"
+            echo -e "${GREEN}✅ search-server-vt is running on port 8083!${NC}"
             break
         fi
         echo -n "."
@@ -133,7 +133,7 @@ start_applications() {
     done
 
     if [ $timeout -le 0 ]; then
-        echo -e "${YELLOW}⚠️ Search-server-virtual may still be starting. Check http://localhost:8083${NC}"
+        echo -e "${YELLOW}⚠️ search-server-vt may still be starting. Check http://localhost:8083${NC}"
     fi
 }
 
@@ -187,9 +187,9 @@ cleanup() {
         kill $SEARCH_VIRTUAL_PID > /dev/null 2>&1
     fi
     pkill -f "authorization-server.*spring-boot:run" > /dev/null 2>&1
-    pkill -f "search-server.*spring-boot:run" > /dev/null 2>&1
-    pkill -f "search-server-virtual.*spring-boot:run" > /dev/null 2>&1
-    docker-compose -f "$SCRIPT_DIR/docker-compose.yml" down > /dev/null 2_1
+    pkill -f "search-server-wf.*spring-boot:run" > /dev/null 2>&1
+    pkill -f "search-server-vt.*spring-boot:run" > /dev/null 2>&1
+    docker-compose -f "$SCRIPT_DIR/docker-compose.yml" down > /dev/null 2>&1
     echo -e "${GREEN}✅ Cleanup complete${NC}"
     exit 0
 }
@@ -204,7 +204,17 @@ start_database
 start_applications
 show_info
 
-# Keep the script running
-if [ ! -z "$AUTH_PID" ] || [ ! -z "$SEARCH_PID" ] || [ ! -z "$SEARCH_VIRTUAL_PID" ]; then
-    wait
-fi
+# Keep the script running - wait for services
+# This will exit when all services are stopped (e.g., by stop.sh or Ctrl+C)
+# Check for both Maven processes (spring-boot:run) and Java processes (Application classes)
+while pgrep -f "authorization-server.*spring-boot:run" > /dev/null || \
+      pgrep -f "search-server-wf.*spring-boot:run" > /dev/null || \
+      pgrep -f "search-server-vt.*spring-boot:run" > /dev/null || \
+      pgrep -f "AuthorizationServiceApplication" > /dev/null || \
+      pgrep -f "SearchServiceWfApplication\|SearchServiceVtApplication" > /dev/null; do
+    sleep 2
+done
+
+echo
+echo -e "${YELLOW}⚠️  All services have stopped${NC}"
+exit 0

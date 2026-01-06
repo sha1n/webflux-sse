@@ -59,7 +59,7 @@ public class SearchService {
         // Apply permission filtering and return results
         return searchResults
                 .bufferTimeout(20, Duration.ofSeconds(5))
-                .flatMap(batch -> checkPermissionsBatch(batch, userId))
+                .concatMap(batch -> checkPermissionsBatch(batch, userId))
                 .flatMapIterable(java.util.function.Function.identity())
                 .take(resultLimit)
                 .map(EventMapper::toDto)
