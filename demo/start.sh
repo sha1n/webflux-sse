@@ -79,6 +79,11 @@ start_applications() {
     echo -e "${YELLOW}⏳ Starting search-server on port 8081...${NC}"
     mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server spring-boot:run > /dev/null 2>&1 &
     SEARCH_PID=$!
+    
+    # Start search-server-virtual on port 8083
+    echo -e "${YELLOW}⏳ Starting search-server-virtual on port 8083...${NC}"
+    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server-virtual spring-boot:run > /dev/null 2>&1 &
+    SEARCH_VIRTUAL_PID=$!
 
     # Wait for authorization-server to start
     echo -e "${YELLOW}⏳ Waiting for authorization-server to start...${NC}"
@@ -113,6 +118,23 @@ start_applications() {
     if [ $timeout -le 0 ]; then
         echo -e "${YELLOW}⚠️ Search-server may still be starting. Check http://localhost:8081${NC}"
     fi
+    
+    # Wait for search-server-virtual to start
+    echo -e "${YELLOW}⏳ Waiting for search-server-virtual to start...${NC}"
+    timeout=120
+    while [ $timeout -gt 0 ]; do
+        if curl -s http://localhost:8083/api/v1/events > /dev/null 2>&1; then
+            echo -e "${GREEN}✅ Search-server-virtual is running on port 8083!${NC}"
+            break
+        fi
+        echo -n "."
+        sleep 3
+        timeout=$((timeout-3))
+    done
+
+    if [ $timeout -le 0 ]; then
+        echo -e "${YELLOW}⚠️ Search-server-virtual may still be starting. Check http://localhost:8083${NC}"
+    fi
 }
 
 # Function to display final information
@@ -123,15 +145,18 @@ show_info() {
     echo -e "${BLUE}📱 Application URLs:${NC}"
     echo -e "   🌐 Main UI (Nginx Gateway): ${YELLOW}http://localhost${NC}"
     echo -e "   📡 SSE Stream: ${YELLOW}http://localhost/api/v1/events${NC}"
-    echo -e "   🔍 Search: ${YELLOW}http://localhost/search.html${NC}"
+    echo -e "   🔍 Search (Reactive): ${YELLOW}http://localhost/search-sse.html${NC}"
+    echo -e "   🔍 Search (Virtual Threads): ${YELLOW}http://localhost/search-sse-virtual.html${NC}"
     echo -e "   🔐 Permissions: ${YELLOW}http://localhost/permissions.html${NC}"
     echo
     echo -e "${BLUE}🔧 Backend Services (Direct Access):${NC}"
-    echo -e "   Search Service: ${YELLOW}http://localhost:8081${NC}"
+    echo -e "   Search Service (Reactive): ${YELLOW}http://localhost:8081${NC}"
+    echo -e "   Search Service (Virtual Threads): ${YELLOW}http://localhost:8083${NC}"
     echo -e "   Authorization Service: ${YELLOW}http://localhost:8082${NC}"
     echo
     echo -e "${BLUE}📚 API Documentation:${NC}"
-    echo -e "   Search Service API: ${YELLOW}http://localhost:8081/swagger-ui.html${NC}"
+    echo -e "   Search Service API (Reactive): ${YELLOW}http://localhost:8081/swagger-ui.html${NC}"
+    echo -e "   Search Service API (Virtual Threads): ${YELLOW}http://localhost:8083/swagger-ui.html${NC}"
     echo -e "   Authorization Service API: ${YELLOW}http://localhost:8082/swagger-ui.html${NC}"
     echo
     echo -e "${BLUE}🗃️ Database Connection:${NC}"
@@ -158,9 +183,13 @@ cleanup() {
     if [ ! -z "$SEARCH_PID" ]; then
         kill $SEARCH_PID > /dev/null 2>&1
     fi
+    if [ ! -z "$SEARCH_VIRTUAL_PID" ]; then
+        kill $SEARCH_VIRTUAL_PID > /dev/null 2>&1
+    fi
     pkill -f "authorization-server.*spring-boot:run" > /dev/null 2>&1
     pkill -f "search-server.*spring-boot:run" > /dev/null 2>&1
-    docker-compose -f "$SCRIPT_DIR/docker-compose.yml" down > /dev/null 2>&1
+    pkill -f "search-server-virtual.*spring-boot:run" > /dev/null 2>&1
+    docker-compose -f "$SCRIPT_DIR/docker-compose.yml" down > /dev/null 2_1
     echo -e "${GREEN}✅ Cleanup complete${NC}"
     exit 0
 }
@@ -176,6 +205,6 @@ start_applications
 show_info
 
 # Keep the script running
-if [ ! -z "$AUTH_PID" ] || [ ! -z "$SEARCH_PID" ]; then
+if [ ! -z "$AUTH_PID" ] || [ ! -z "$SEARCH_PID" ] || [ ! -z "$SEARCH_VIRTUAL_PID" ]; then
     wait
 fi

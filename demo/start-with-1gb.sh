@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Start script with 1GB heap allocation for each service
 # This script sets JAVA_TOOL_OPTIONS before starting services
 
@@ -11,4 +14,4 @@ echo "JAVA_TOOL_OPTIONS=$JAVA_TOOL_OPTIONS"
 echo ""
 
 # Run the normal start script
-./start.sh
+$SCRIPT_DIR/start.sh

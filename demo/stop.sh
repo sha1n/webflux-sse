@@ -22,13 +22,22 @@ else
     echo -e "${YELLOW}ℹ️  No running authorization-server found${NC}"
 fi
 
-# Stop search-server
-echo -e "${YELLOW}🔧 Stopping search-server...${NC}"
-pkill -f "search-server.*spring-boot:run" > /dev/null 2>&1
+# Stop search-server (reactive)
+echo -e "${YELLOW}🔧 Stopping search-server (WebFlux)...${NC}"
+pkill -f "search-server[^-].*spring-boot:run" > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ Search-server stopped${NC}"
+    echo -e "${GREEN}✅ Search-server (WebFlux) stopped${NC}"
 else
-    echo -e "${YELLOW}ℹ️  No running search-server found${NC}"
+    echo -e "${YELLOW}ℹ️  No running search-server (WebFlux) found${NC}"
+fi
+
+# Stop search-server-virtual
+echo -e "${YELLOW}🔧 Stopping search-server-virtual (Virtual Threads)...${NC}"
+pkill -f "search-server-virtual.*spring-boot:run" > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Search-server-virtual (Virtual Threads) stopped${NC}"
+else
+    echo -e "${YELLOW}ℹ️  No running search-server-virtual found${NC}"
 fi
 
 # Stop Docker containers

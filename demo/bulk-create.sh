@@ -15,18 +15,20 @@ EVENT_COUNT=""
 DESC_SIZE_KB=0.5
 BATCH_SIZE=100
 PARALLEL_BATCHES=10
+STACK=""
 
 # Function to display usage
 usage() {
-    echo -e "${BLUE}Usage: $0 --count <number_of_events> [--size <description_size_kb>] [--batch <batch_size>] [--parallel <parallel_batches>]${NC}"
+    echo -e "${BLUE}Usage: $0 --count <number_of_events> --stack <wf|vt> [--size <description_size_kb>] [--batch <batch_size>] [--parallel <parallel_batches>]${NC}"
     echo -e "  ${GREEN}--count${NC}     Number of events to create (required)"
+    echo -e "  ${GREEN}--stack${NC}     Backend stack to use: 'wf' (WebFlux) or 'vt' (Virtual Threads) (required)"
     echo -e "  ${GREEN}--size${NC}      Size of description in KB (optional, default: 0.5 KB)"
     echo -e "  ${GREEN}--batch${NC}     Number of events per bulk request (optional, default: 100)"
     echo -e "  ${GREEN}--parallel${NC}  Number of parallel batch requests (optional, default: 10)"
     echo ""
     echo "Examples:"
-    echo "  $0 --count 100000 --batch 250 --parallel 20  # Fast: 100k events"
-    echo "  $0 --count 1000000 --batch 500 --parallel 50 # Very fast: 1M events"
+    echo "  $0 --count 100000 --stack wf --batch 250 --parallel 20  # Fast: 100k events to WebFlux"
+    echo "  $0 --count 1000000 --stack vt --batch 500 --parallel 50 # Very fast: 1M events to VT"
     exit 1
 }
 
@@ -35,6 +37,10 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         --count)
             EVENT_COUNT="$2"
+            shift 2
+            ;;
+        --stack)
+            STACK="$2"
             shift 2
             ;;
         --size)
@@ -59,10 +65,28 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Validate required argument
+# Validate required arguments
 if [ -z "$EVENT_COUNT" ]; then
     echo -e "${RED}Error: --count argument is required${NC}"
     usage
+fi
+
+if [ -z "$STACK" ]; then
+    echo -e "${RED}Error: --stack argument is required${NC}"
+    usage
+fi
+
+# Validate stack parameter
+if [[ "$STACK" != "wf" && "$STACK" != "vt" ]]; then
+    echo -e "${RED}Error: --stack must be 'wf' (WebFlux) or 'vt' (Virtual Threads)${NC}"
+    exit 1
+fi
+
+# Set stack name for display
+if [[ "$STACK" == "wf" ]]; then
+    STACK_NAME="WebFlux"
+else
+    STACK_NAME="Virtual Threads"
 fi
 
 # Validate that event count is a positive number
@@ -105,6 +129,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOTAL_BATCHES=$(( (EVENT_COUNT + BATCH_SIZE - 1) / BATCH_SIZE ))
 
 echo -e "${BLUE}Creating $EVENT_COUNT events using optimized parallel bulk API...${NC}"
+echo -e "${BLUE}Stack: ${GREEN}${STACK_NAME}${NC}"
 echo -e "${BLUE}Description size: ${DESC_SIZE_KB} KB${NC}"
 echo -e "${BLUE}Batch size: ${BATCH_SIZE} events per request${NC}"
 echo -e "${BLUE}Parallel batches: ${PARALLEL_BATCHES} concurrent requests${NC}"
@@ -124,8 +149,8 @@ START_TIME=$(date +%s)
 # For each batch, calculate start event number
 for batch_id in $(seq 1 $TOTAL_BATCHES); do
     start_num=$(( (batch_id - 1) * BATCH_SIZE + 1 ))
-    echo "$batch_id $start_num $BATCH_SIZE $EVENT_COUNT $DESC_SIZE_KB"
-done | parallel -j $PARALLEL_BATCHES --colsep ' ' --bar "$SCRIPT_DIR/create-batch-optimized.sh {1} {2} {3} {4} {5}" 2>/dev/null > "$RESULTS_FILE"
+    echo "$batch_id $start_num $BATCH_SIZE $EVENT_COUNT $DESC_SIZE_KB $STACK"
+done | parallel -j $PARALLEL_BATCHES --colsep ' ' --bar "$SCRIPT_DIR/create-batch-optimized.sh {1} {2} {3} {4} {5} {6}" 2>/dev/null > "$RESULTS_FILE"
 
 # Record end time
 END_TIME=$(date +%s)

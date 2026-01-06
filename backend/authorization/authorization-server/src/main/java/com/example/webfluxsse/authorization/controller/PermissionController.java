@@ -222,20 +222,28 @@ public class PermissionController {
         log.info("Granting permissions for multiple events: eventIds={}, userId={}",
             request.eventIds(), request.userId());
 
-        return Flux.fromIterable(request.eventIds())
-                .doOnSubscribe(sub -> log.info("Subscribed to bulk permission grant for userId={}", request.userId()))
-                .map(eventId -> new UserEventPermissionEntity(eventId, request.userId()))
-                .flatMap(entity ->
-                    permissionRepository.save(entity)
-                        .map(PermissionMapper::toDto)
-                        .onErrorResume(error -> {
-                            log.warn("Permission already exists for eventId={}, userId={}, skipping",
-                                entity.getEventId(), entity.getUserId());
-                            return Mono.empty(); // Skip duplicate permissions
-                        }),
-                    100  // Limit to 100 concurrent database operations
-                )
-                .doOnNext(savedPermission -> log.info("Successfully granted permission with id={}", savedPermission.id()))
+        // First, find which permissions already exist
+        return permissionRepository.findAllByUserIdAndEventIdIn(request.userId(), request.eventIds())
+                .map(UserEventPermissionEntity::getEventId)
+                .collect(java.util.stream.Collectors.toSet())
+                .flatMapMany(existingEventIds -> {
+                    // Filter out events that already have permissions
+                    java.util.List<Long> newEventIds = request.eventIds().stream()
+                            .filter(eventId -> !existingEventIds.contains(eventId))
+                            .collect(java.util.stream.Collectors.toList());
+
+                    log.info("Found {} existing permissions, creating {} new permissions for userId={}",
+                            existingEventIds.size(), newEventIds.size(), request.userId());
+
+                    // Only save new permissions
+                    return Flux.fromIterable(newEventIds)
+                            .map(eventId -> new UserEventPermissionEntity(eventId, request.userId()))
+                            .flatMap(entity ->
+                                permissionRepository.save(entity)
+                                    .map(PermissionMapper::toDto),
+                                100  // Limit to 100 concurrent database operations
+                            );
+                })
                 .doOnComplete(() -> log.info("Completed bulk permission grant for userId={}", request.userId()))
                 .doOnCancel(() -> log.warn("CANCELLED bulk permission grant for userId={}", request.userId()))
                 .doOnError(error -> log.error("ERROR in bulk permission grant for userId={}: {}", request.userId(), error.getMessage()));

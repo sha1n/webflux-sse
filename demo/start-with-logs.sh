@@ -86,13 +86,22 @@ start_applications() {
     AUTH_PID=$!
     unset JAVA_TOOL_OPTIONS
 
-    # Start search-server on port 8081 with 1GB RAM
-    echo -e "${YELLOW}⏳ Starting search-server on port 8081 (1GB RAM)...${NC}"
+    # Start search-server (reactive) on port 8081 with 1GB RAM
+    echo -e "${YELLOW}⏳ Starting search-server (WebFlux) on port 8081 (1GB RAM)...${NC}"
     echo -e "${BLUE}   Log file: $LOG_DIR/search-server.log${NC}"
     export JAVA_TOOL_OPTIONS="-Xms1024m -Xmx1024m"
     mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server spring-boot:run \
         > "$LOG_DIR/search-server.log" 2>&1 &
     SEARCH_PID=$!
+    unset JAVA_TOOL_OPTIONS
+
+    # Start search-server-virtual on port 8083 with 1GB RAM
+    echo -e "${YELLOW}⏳ Starting search-server-virtual (Virtual Threads) on port 8083 (1GB RAM)...${NC}"
+    echo -e "${BLUE}   Log file: $LOG_DIR/search-server-virtual.log${NC}"
+    export JAVA_TOOL_OPTIONS="-Xms1024m -Xmx1024m"
+    mvn -f "$SCRIPT_DIR/../pom.xml" -pl backend/search/search-server-virtual spring-boot:run \
+        > "$LOG_DIR/search-server-virtual.log" 2>&1 &
+    SEARCH_VIRTUAL_PID=$!
     unset JAVA_TOOL_OPTIONS
 
     # Wait for authorization-server to start
@@ -113,11 +122,11 @@ start_applications() {
     fi
 
     # Wait for search-server to start
-    echo -e "${YELLOW}⏳ Waiting for search-server to start...${NC}"
+    echo -e "${YELLOW}⏳ Waiting for search-server (WebFlux) to start...${NC}"
     timeout=120
     while [ $timeout -gt 0 ]; do
         if curl -s http://localhost:8081/api/v1/events > /dev/null 2>&1; then
-            echo -e "${GREEN}✅ Search-server is running on port 8081!${NC}"
+            echo -e "${GREEN}✅ Search-server (WebFlux) is running on port 8081!${NC}"
             break
         fi
         echo -n "."
@@ -127,6 +136,23 @@ start_applications() {
 
     if [ $timeout -le 0 ]; then
         echo -e "${YELLOW}⚠️ Search-server may still be starting. Check logs: tail -f $LOG_DIR/search-server.log${NC}"
+    fi
+
+    # Wait for search-server-virtual to start
+    echo -e "${YELLOW}⏳ Waiting for search-server-virtual (Virtual Threads) to start...${NC}"
+    timeout=120
+    while [ $timeout -gt 0 ]; do
+        if curl -s http://localhost:8083/api/v1/events > /dev/null 2>&1; then
+            echo -e "${GREEN}✅ Search-server-virtual (Virtual Threads) is running on port 8083!${NC}"
+            break
+        fi
+        echo -n "."
+        sleep 3
+        timeout=$((timeout-3))
+    done
+
+    if [ $timeout -le 0 ]; then
+        echo -e "${YELLOW}⚠️ Search-server-virtual may still be starting. Check logs: tail -f $LOG_DIR/search-server-virtual.log${NC}"
     fi
 }
 
@@ -142,12 +168,14 @@ show_info() {
     echo -e "   🔐 Permissions: ${YELLOW}http://localhost/permissions.html${NC}"
     echo
     echo -e "${BLUE}🔧 Backend Services (Direct Access):${NC}"
-    echo -e "   Search Service: ${YELLOW}http://localhost:8081${NC}"
+    echo -e "   Search Service (WebFlux): ${YELLOW}http://localhost:8081${NC}"
     echo -e "   Authorization Service: ${YELLOW}http://localhost:8082${NC}"
+    echo -e "   Search Service (Virtual Threads): ${YELLOW}http://localhost:8083${NC}"
     echo
     echo -e "${BLUE}📋 Log Files:${NC}"
-    echo -e "   Search Service: ${YELLOW}tail -f $LOG_DIR/search-server.log${NC}"
+    echo -e "   Search Service (WebFlux): ${YELLOW}tail -f $LOG_DIR/search-server.log${NC}"
     echo -e "   Authorization Service: ${YELLOW}tail -f $LOG_DIR/authorization-server.log${NC}"
+    echo -e "   Search Service (VT): ${YELLOW}tail -f $LOG_DIR/search-server-virtual.log${NC}"
     echo -e "   Monitor script: ${YELLOW}./monitor-logs.sh${NC}"
     echo
     echo -e "${BLUE}📋 Available Commands:${NC}"
@@ -167,8 +195,12 @@ cleanup() {
     if [ ! -z "$SEARCH_PID" ]; then
         kill $SEARCH_PID > /dev/null 2>&1
     fi
+    if [ ! -z "$SEARCH_VIRTUAL_PID" ]; then
+        kill $SEARCH_VIRTUAL_PID > /dev/null 2>&1
+    fi
     pkill -f "authorization-server.*spring-boot:run" > /dev/null 2>&1
     pkill -f "search-server.*spring-boot:run" > /dev/null 2>&1
+    pkill -f "search-server-virtual.*spring-boot:run" > /dev/null 2>&1
     docker-compose -f "$SCRIPT_DIR/docker-compose.yml" down > /dev/null 2>&1
     echo -e "${GREEN}✅ Cleanup complete${NC}"
     exit 0

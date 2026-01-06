@@ -9,8 +9,9 @@ spring:
       initial-size: 10
       max-size: 100
       max-idle-time: 30m
-      max-acquire-time: 3s
-      max-create-connection-time: 3s
+      max-acquire-time: 10s
+      max-create-connection-time: 10s
+      validation-query: SELECT 1
   sql:
     init:
       mode: never
@@ -20,5 +21,6 @@ server:
 
 logging:
   level:
+    root: WARN
     org.springframework.r2dbc: WARN
     io.r2dbc.postgresql.QUERY: WARN

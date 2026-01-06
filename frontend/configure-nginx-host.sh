@@ -37,13 +37,17 @@ else
     if [[ "$OSTYPE" == "darwin"* ]]; then
         sed -i '' "s/server DOCKER_HOST_IP:8081;/server $HOST_IP:8081;/" "$NGINX_DIR/nginx.conf"
         sed -i '' "s/server DOCKER_HOST_IP:8082;/server $HOST_IP:8082;/" "$NGINX_DIR/nginx.conf"
+        sed -i '' "s/server DOCKER_HOST_IP:8083;/server $HOST_IP:8083;/" "$NGINX_DIR/nginx.conf"
         sed -i '' "s/server [0-9.]*:8081;/server $HOST_IP:8081;/" "$NGINX_DIR/nginx.conf"
         sed -i '' "s/server [0-9.]*:8082;/server $HOST_IP:8082;/" "$NGINX_DIR/nginx.conf"
+        sed -i '' "s/server [0-9.]*:8083;/server $HOST_IP:8083;/" "$NGINX_DIR/nginx.conf"
     else
         sed -i "s/server DOCKER_HOST_IP:8081;/server $HOST_IP:8081;/" "$NGINX_DIR/nginx.conf"
         sed -i "s/server DOCKER_HOST_IP:8082;/server $HOST_IP:8082;/" "$NGINX_DIR/nginx.conf"
+        sed -i "s/server DOCKER_HOST_IP:8083;/server $HOST_IP:8083;/" "$NGINX_DIR/nginx.conf"
         sed -i "s/server [0-9.]*:8081;/server $HOST_IP:8081;/" "$NGINX_DIR/nginx.conf"
         sed -i "s/server [0-9.]*:8082;/server $HOST_IP:8082;/" "$NGINX_DIR/nginx.conf"
+        sed -i "s/server [0-9.]*:8083;/server $HOST_IP:8083;/" "$NGINX_DIR/nginx.conf"
     fi
     echo "nginx.conf updated"
 fi

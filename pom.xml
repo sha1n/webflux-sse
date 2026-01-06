@@ -21,6 +21,7 @@
         <module>backend/search/search-service-api</module>
         <module>backend/authorization/authorization-service-api</module>
         <module>backend/search/search-server</module>
+        <module>backend/search/search-server-virtual</module>
         <module>backend/authorization/authorization-server</module>
     </modules>
 
