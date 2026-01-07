@@ -95,7 +95,7 @@ class DualPersistenceIT {
                 .id();
 
         // Verify event exists in PostgreSQL
-        Event postgresEvent = eventRepository.findById(eventId).map(EventMapper::toDto);
+        Event postgresEvent = eventRepository.findById(eventId).map(EventMapper::toDto).orElse(null);
         assert postgresEvent != null;
         assert postgresEvent.title().equals("Test Event");
         assert postgresEvent.description().equals("This is a test event for dual persistence");
@@ -104,7 +104,7 @@ class DualPersistenceIT {
         Thread.sleep(2000);
 
         // Verify event exists in Elasticsearch
-        Event elasticsearchEvent = elasticsearchRepository.findById(eventId).map(EventMapper::toDto);
+        Event elasticsearchEvent = elasticsearchRepository.findById(eventId).map(EventMapper::toDto).orElse(null);
         assert elasticsearchEvent != null;
         assert elasticsearchEvent.title().equals("Test Event");
         assert elasticsearchEvent.description().equals("This is a test event for dual persistence");

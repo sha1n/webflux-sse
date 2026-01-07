@@ -1,5 +1,7 @@
 package com.example.virtualthreads.search.service;
 
+import co.elastic.clients.elasticsearch._types.query_dsl.MultiMatchQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import com.example.webfluxsse.authorization.api.dto.BatchPermissionCheckResponse;
 import com.example.search.api.model.Event;
 import com.example.virtualthreads.search.client.AuthorizationServiceClient;
@@ -9,9 +11,11 @@ import com.example.virtualthreads.search.repository.elasticsearch.EventElasticse
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.elasticsearch.client.elc.NativeQuery;
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.data.elasticsearch.core.SearchHit;
+import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -27,12 +31,15 @@ public class SearchService {
     private static final int PAGE_SIZE = 50; // Fetch 50 at a time, check permissions in batches
     private final EventElasticsearchRepository elasticsearchRepository;
     private final AuthorizationServiceClient authorizationClient;
+    private final ElasticsearchOperations elasticsearchOperations;
 
     public SearchService(EventElasticsearchRepository elasticsearchRepository,
-                         AuthorizationServiceClient authorizationClient) {
+                         AuthorizationServiceClient authorizationClient,
+                         ElasticsearchOperations elasticsearchOperations) {
         this.elasticsearchRepository = elasticsearchRepository;
         this.authorizationClient = authorizationClient;
-        log.info("SearchService initialized with search_after pagination (no scroll contexts)");
+        this.elasticsearchOperations = elasticsearchOperations;
+        log.info("SearchService initialized with ElasticsearchOperations for proper pagination");
     }
 
     public Stream<Event> searchEventsForUser(String query, String userId, Integer limit) {
@@ -64,23 +71,23 @@ public class SearchService {
     }
 
     /**
-     * Iterator that implements pagination using search_after pattern.
+     * Iterator that implements pagination using ElasticsearchOperations.
      * Fetches pages from Elasticsearch on-demand, checks permissions in batches,
-     * and only returns authorized events. No scroll contexts are created.
+     * and only returns authorized events. Uses proper pagination with from/size parameters.
      */
     private class PaginatedSearchIterator implements Iterator<Event> {
-        private final String query;
+        private final String searchQuery;
         private final boolean exactPhrase;
         private final String userId;
         private final int totalLimit;
 
-        private int currentPage = 0;
+        private int currentOffset = 0;
         private int returnedCount = 0;
         private final Queue<Event> buffer = new LinkedList<>();
-        private boolean hasMorePages = true;
+        private boolean hasMoreResults = true;
 
-        PaginatedSearchIterator(String query, boolean exactPhrase, String userId, int totalLimit) {
-            this.query = query;
+        PaginatedSearchIterator(String searchQuery, boolean exactPhrase, String userId, int totalLimit) {
+            this.searchQuery = searchQuery;
             this.exactPhrase = exactPhrase;
             this.userId = userId;
             this.totalLimit = totalLimit;
@@ -89,7 +96,7 @@ public class SearchService {
         @Override
         public boolean hasNext() {
             // Fetch next page if buffer is empty and we haven't hit limits
-            while (buffer.isEmpty() && hasMorePages && returnedCount < totalLimit) {
+            while (buffer.isEmpty() && hasMoreResults && returnedCount < totalLimit) {
                 fetchNextPage();
             }
             return !buffer.isEmpty();
@@ -106,28 +113,37 @@ public class SearchService {
 
         private void fetchNextPage() {
             try {
-                // Create pageable with sort by relevance (_score) and id for stable pagination
-                PageRequest pageRequest = PageRequest.of(currentPage, PAGE_SIZE,
-                        Sort.by(Sort.Order.desc("_score"), Sort.Order.asc("id")));
+                // Build Elasticsearch query using the new Elasticsearch Java client API
+                Query elasticsearchQuery = buildMultiMatchQuery(searchQuery, exactPhrase);
 
-                Page<EventEntity> page;
-                if (exactPhrase) {
-                    page = elasticsearchRepository.searchByExactPhrase(query, pageRequest);
-                } else {
-                    page = elasticsearchRepository.searchByTitleOrDescription(query, pageRequest);
-                }
+                // Create NativeQuery with proper pagination (from/size)
+                NativeQuery nativeQuery = NativeQuery.builder()
+                        .withQuery(elasticsearchQuery)
+                        .withPageable(PageRequest.of(currentOffset / PAGE_SIZE, PAGE_SIZE))
+                        .build();
 
-                if (page.isEmpty()) {
-                    hasMorePages = false;
-                    log.debug("No more pages available for query='{}', userId='{}'", query, userId);
+                log.debug("Executing Elasticsearch query: offset={}, size={}, query='{}', userId='{}'",
+                        currentOffset, PAGE_SIZE, searchQuery, userId);
+
+                // Execute query using ElasticsearchOperations
+                SearchHits<EventEntity> searchHits = elasticsearchOperations.search(nativeQuery, EventEntity.class);
+
+                if (searchHits.isEmpty()) {
+                    hasMoreResults = false;
+                    log.debug("No more results available for query='{}', userId='{}'", searchQuery, userId);
                     return;
                 }
 
-                log.debug("Fetched page {} with {} results for query='{}', userId='{}'",
-                        currentPage, page.getNumberOfElements(), query, userId);
+                // Extract entities from search hits
+                List<EventEntity> entities = searchHits.getSearchHits().stream()
+                        .map(SearchHit::getContent)
+                        .collect(Collectors.toList());
 
-                // Check permissions for this page
-                List<EventEntity> authorizedEntities = checkPermissionsBatch(page.getContent(), userId);
+                log.debug("Fetched {} results at offset {} for query='{}', userId='{}'",
+                        entities.size(), currentOffset, searchQuery, userId);
+
+                // Check permissions for this batch
+                List<EventEntity> authorizedEntities = checkPermissionsBatch(entities, userId);
 
                 // Add authorized events to buffer
                 authorizedEntities.stream()
@@ -135,15 +151,39 @@ public class SearchService {
                         .forEach(buffer::offer);
 
                 // Update pagination state
-                currentPage++;
-                hasMorePages = page.hasNext();
+                currentOffset += PAGE_SIZE;
+
+                // Continue if we got a full page (might have more results)
+                // Stop if we got fewer results than PAGE_SIZE (last page)
+                hasMoreResults = entities.size() == PAGE_SIZE;
 
             } catch (Exception e) {
-                log.error("Error fetching page {} for query='{}', userId='{}': {}",
-                        currentPage, query, userId, e.getMessage());
-                hasMorePages = false;
+                log.error("Error fetching results at offset {} for query='{}', userId='{}': {}",
+                        currentOffset, searchQuery, userId, e.getMessage(), e);
+                hasMoreResults = false;
             }
         }
+    }
+
+    /**
+     * Builds an Elasticsearch multi_match query matching the WF implementation exactly.
+     */
+    private Query buildMultiMatchQuery(String queryText, boolean exactPhrase) {
+        MultiMatchQuery.Builder builder = new MultiMatchQuery.Builder()
+                .query(queryText)
+                .fields("title", "description");
+
+        if (exactPhrase) {
+            // Exact phrase match
+            builder.type(co.elastic.clients.elasticsearch._types.query_dsl.TextQueryType.Phrase);
+        } else {
+            // Best fields with OR operator and AUTO fuzziness
+            builder.type(co.elastic.clients.elasticsearch._types.query_dsl.TextQueryType.BestFields)
+                   .operator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.Or)
+                   .fuzziness("AUTO");
+        }
+
+        return builder.build()._toQuery();
     }
 
     /**

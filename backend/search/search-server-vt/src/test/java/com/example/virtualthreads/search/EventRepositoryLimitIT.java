@@ -15,12 +15,13 @@ import org.testcontainers.elasticsearch.ElasticsearchContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import reactor.test.StepVerifier;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(properties = "spring.profiles.active=it")
 @Testcontainers
@@ -81,12 +82,11 @@ class EventRepositoryLimitIT {
     }
 
     // Save all events
-    eventRepository.saveAll(entities).collectList();
+    eventRepository.saveAll(entities);
 
     // Query all events - should return only 200
-    StepVerifier.create(eventRepository.findAllOrderByTimestampDesc())
-        .expectNextCount(REPOSITORY_LIMIT)
-        .verifyComplete();
+    List<EventEntity> result = eventRepository.findAllOrderByTimestampDesc();
+    assertThat(result).hasSize(REPOSITORY_LIMIT);
   }
 
   @Test
@@ -105,12 +105,11 @@ class EventRepositoryLimitIT {
     }
 
     // Save all events
-    eventRepository.saveAll(entities).collectList();
+    eventRepository.saveAll(entities);
 
     // Query all events - should return all 50
-    StepVerifier.create(eventRepository.findAllOrderByTimestampDesc())
-        .expectNextCount(totalEvents)
-        .verifyComplete();
+    List<EventEntity> result = eventRepository.findAllOrderByTimestampDesc();
+    assertThat(result).hasSize(totalEvents);
   }
 
   @Test
@@ -129,12 +128,11 @@ class EventRepositoryLimitIT {
     }
 
     // Save all events
-    eventRepository.saveAll(entities).collectList();
+    eventRepository.saveAll(entities);
 
     // Query all events - should return exactly 200
-    StepVerifier.create(eventRepository.findAllOrderByTimestampDesc())
-        .expectNextCount(REPOSITORY_LIMIT)
-        .verifyComplete();
+    List<EventEntity> result = eventRepository.findAllOrderByTimestampDesc();
+    assertThat(result).hasSize(REPOSITORY_LIMIT);
   }
 
   @Test
@@ -156,30 +154,17 @@ class EventRepositoryLimitIT {
     }
 
     // Save all events
-    eventRepository.saveAll(entities).collectList();
+    eventRepository.saveAll(entities);
 
     // Query all events - should return most recent 200 in DESC order
-    StepVerifier.create(eventRepository.findAllOrderByTimestampDesc())
-        .expectNextCount(REPOSITORY_LIMIT)
-        .verifyComplete();
+    List<EventEntity> result = eventRepository.findAllOrderByTimestampDesc();
+    assertThat(result).hasSize(REPOSITORY_LIMIT);
 
     // Verify the first event is the most recent (Event 249)
-    StepVerifier.create(
-            eventRepository
-                .findAllOrderByTimestampDesc()
-                .take(1)
-                .map(entity -> entity.getTitle()))
-        .expectNext("Event 249")
-        .verifyComplete();
+    assertThat(result.get(0).getTitle()).isEqualTo("Event 249");
 
     // Verify the last event in the result is Event 50 (249 - 199 = 50)
-    StepVerifier.create(
-            eventRepository
-                .findAllOrderByTimestampDesc()
-                .elementAt(199) // 0-indexed, so 199 is the 200th element
-                .map(entity -> entity.getTitle()))
-        .expectNext("Event 50")
-        .verifyComplete();
+    assertThat(result.get(199).getTitle()).isEqualTo("Event 50");
   }
 
   @Test
@@ -199,16 +184,15 @@ class EventRepositoryLimitIT {
     }
 
     // Save all events
-    eventRepository.saveAll(entities).collectList();
+    eventRepository.saveAll(entities);
 
     // Query events since a timestamp that has 250 events after it
     // Event 49 has timestamp baseTime + 49 seconds
     // Events 50-299 (250 events) are after it
     LocalDateTime since = baseTime.plusSeconds(49);
 
-    StepVerifier.create(eventRepository.findByTimestampAfterOrderByTimestampDesc(since))
-        .expectNextCount(REPOSITORY_LIMIT)
-        .verifyComplete();
+    List<EventEntity> result = eventRepository.findByTimestampAfterOrderByTimestampDesc(since);
+    assertThat(result).hasSize(REPOSITORY_LIMIT);
   }
 
   @Test
@@ -227,22 +211,15 @@ class EventRepositoryLimitIT {
     }
 
     // Save all events
-    eventRepository.saveAll(entities).collectList();
+    eventRepository.saveAll(entities);
 
     // Query events after Event 29 (30 events should be returned: Event 30-49)
     LocalDateTime since = baseTime.plusSeconds(29);
 
-    StepVerifier.create(eventRepository.findByTimestampAfterOrderByTimestampDesc(since))
-        .expectNextCount(20) // Events 30-49 = 20 events
-        .verifyComplete();
+    List<EventEntity> result = eventRepository.findByTimestampAfterOrderByTimestampDesc(since);
+    assertThat(result).hasSize(20); // Events 30-49 = 20 events
 
     // Verify the first event is Event 49 (most recent)
-    StepVerifier.create(
-            eventRepository
-                .findByTimestampAfterOrderByTimestampDesc(since)
-                .take(1)
-                .map(entity -> entity.getTitle()))
-        .expectNext("Event 49")
-        .verifyComplete();
+    assertThat(result.get(0).getTitle()).isEqualTo("Event 49");
   }
 }

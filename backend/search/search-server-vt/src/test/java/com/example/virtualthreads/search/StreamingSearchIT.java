@@ -114,7 +114,7 @@ class StreamingSearchIT {
         }
 
         // 2. Index in Elasticsearch
-        elasticsearchRepository.saveAll(entities).collectList();
+        elasticsearchRepository.saveAll(entities);
 
         // 3. Determine which events user1 should have access to (odd numbered events = 12 events)
         Set<Long> authorizedEventIds = new HashSet<>();
@@ -205,7 +205,7 @@ class StreamingSearchIT {
         entities.add(entity3);
 
         // 2. Index in Elasticsearch
-        elasticsearchRepository.saveAll(entities).collectList();
+        elasticsearchRepository.saveAll(entities);
 
         // 3. Mock authorization - user1 has access to all events
         Set<Long> allEventIds = entities.stream().map(EventEntity::getId).collect(Collectors.toSet());
@@ -261,7 +261,7 @@ class StreamingSearchIT {
         entities.add(entity3);
 
         // 2. Index in Elasticsearch
-        elasticsearchRepository.saveAll(entities).collectList();
+        elasticsearchRepository.saveAll(entities);
 
         // 3. Mock authorization - user1 has access to all events
         Set<Long> allEventIds = entities.stream().map(EventEntity::getId).collect(Collectors.toSet());
@@ -320,7 +320,7 @@ class StreamingSearchIT {
         entities.add(entity3);
 
         // 2. Index in Elasticsearch
-        elasticsearchRepository.saveAll(entities).collectList();
+        elasticsearchRepository.saveAll(entities);
 
         // 3. Mock authorization - user1 has access to all events
         Set<Long> allEventIds = entities.stream().map(EventEntity::getId).collect(Collectors.toSet());
@@ -379,7 +379,7 @@ class StreamingSearchIT {
         entities.add(entity4);
 
         // 2. Index in Elasticsearch
-        elasticsearchRepository.saveAll(entities).collectList();
+        elasticsearchRepository.saveAll(entities);
 
         // 3. Mock authorization - user1 has access to all events
         Set<Long> allEventIds = entities.stream().map(EventEntity::getId).collect(Collectors.toSet());
@@ -438,7 +438,7 @@ class StreamingSearchIT {
         entities.add(entity3);
 
         // 2. Index in Elasticsearch
-        elasticsearchRepository.saveAll(entities).collectList();
+        elasticsearchRepository.saveAll(entities);
 
         // 3. Mock authorization - user1 has access to all events
         Set<Long> allEventIds = entities.stream().map(EventEntity::getId).collect(Collectors.toSet());
@@ -510,7 +510,7 @@ class StreamingSearchIT {
         entities.add(entity3);
 
         // 2. Index in Elasticsearch
-        elasticsearchRepository.saveAll(entities).collectList();
+        elasticsearchRepository.saveAll(entities);
 
         // 3. Mock authorization - user1 has access to all events
         Set<Long> allEventIds = entities.stream().map(EventEntity::getId).collect(Collectors.toSet());

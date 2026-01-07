@@ -172,9 +172,15 @@ class EventControllerIT {
                 .take(2)
                 .timeout(Duration.ofSeconds(10));
 
-        eventRepository.save(EventMapper.toEntity(new Event(null, LocalDateTime.now(), "New Event", "New Description")))
-                .delaySubscription(Duration.ofSeconds(1))
-                .subscribe();
+        // Save event asynchronously after 1 second delay (simulating delayed event arrival)
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                Thread.sleep(1000);
+                eventRepository.save(EventMapper.toEntity(new Event(null, LocalDateTime.now(), "New Event", "New Description")));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
 
         StepVerifier.create(eventStream)
                 .expectNextMatches(eventData -> eventData.contains("Initial Event"))

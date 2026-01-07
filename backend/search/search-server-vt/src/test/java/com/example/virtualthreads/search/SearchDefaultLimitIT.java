@@ -282,7 +282,7 @@ class SearchDefaultLimitIT {
       events.add(EventMapper.toDto(savedEntity));
     }
 
-    elasticsearchRepository.saveAll(entities).collectList();
+    elasticsearchRepository.saveAll(entities);
     return events;
   }
 
