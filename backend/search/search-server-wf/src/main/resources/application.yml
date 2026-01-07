@@ -22,10 +22,20 @@ spring:
 
 server:
   port: 8081
+  # Note: Netty event loop threads are auto-configured by Spring Boot
+  # Default is 2 * number of CPU cores, which is optimal for most workloads
+  # To customize, create a NettyReactiveWebServerFactory bean
 
 authorization-service:
   base-url: http://localhost:8082
   timeout: 5s
+  connect-timeout: 5s
+  read-timeout: 10s
+  write-timeout: 10s
+  max-connections: 500        # Maximum connections in pool
+  pending-acquire-timeout: 45s  # Max wait time for connection from pool
+  max-idle-time: 20s          # Close idle connections after this time
+  max-life-time: 60s          # Max lifetime of any connection
 
 logging:
   level:

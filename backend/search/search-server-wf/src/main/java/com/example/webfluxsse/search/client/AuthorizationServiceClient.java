@@ -20,13 +20,11 @@ public class AuthorizationServiceClient {
     private final WebClient webClient;
     private final Duration timeout;
 
-    public AuthorizationServiceClient(@Value("${authorization-service.base-url}") String baseUrl,
+    public AuthorizationServiceClient(WebClient webClient,
                                      @Value("${authorization-service.timeout:5s}") Duration timeout) {
-        this.webClient = WebClient.builder()
-                .baseUrl(baseUrl)
-                .build();
+        this.webClient = webClient;
         this.timeout = timeout;
-        log.info("AuthorizationServiceClient initialized with baseUrl: {}, timeout: {}", baseUrl, timeout);
+        log.info("AuthorizationServiceClient initialized with shared WebClient, timeout: {}", timeout);
     }
 
     public Mono<BatchPermissionCheckResponse> checkBatchPermissions(List<Long> eventIds, String userId) {

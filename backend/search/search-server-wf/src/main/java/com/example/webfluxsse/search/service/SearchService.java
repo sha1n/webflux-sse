@@ -57,9 +57,10 @@ public class SearchService {
         }
 
         // Apply permission filtering and return results
+        // Use flatMap with concurrency=4 for parallel permission checks (better throughput than concatMap)
         return searchResults
                 .bufferTimeout(20, Duration.ofSeconds(5))
-                .concatMap(batch -> checkPermissionsBatch(batch, userId))
+                .flatMap(batch -> checkPermissionsBatch(batch, userId), 4)
                 .flatMapIterable(java.util.function.Function.identity())
                 .take(resultLimit)
                 .map(EventMapper::toDto)
@@ -97,9 +98,18 @@ public class SearchService {
         log.debug("Getting all events for userId='{}', limit={}", userId, limit);
 
         // Call authorization-service to get event IDs user has access to
+        // Collect IDs and query Elasticsearch in a single batch query instead of N+1 queries
         return authorizationClient.getEventIdsForUser(userId)
-                .flatMap(eventId -> elasticsearchRepository.findById(eventId)
-                        .doOnNext(entity -> log.trace("Found event: id={}", entity.getId())))
+                .collectList()
+                .flatMapMany(eventIds -> {
+                    if (eventIds.isEmpty()) {
+                        log.debug("No authorized event IDs for userId='{}'", userId);
+                        return Flux.empty();
+                    }
+                    log.debug("Fetching {} events in batch for userId='{}'", eventIds.size(), userId);
+                    // Single batch query instead of N individual queries
+                    return elasticsearchRepository.findAllById(eventIds);
+                })
                 .take(limit)
                 .map(EventMapper::toDto)
                 .doOnComplete(() -> log.debug("Retrieved up to {} events for userId='{}'", limit, userId))
