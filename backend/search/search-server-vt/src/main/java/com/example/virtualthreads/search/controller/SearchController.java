@@ -63,11 +63,36 @@ public class SearchController {
         SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
         sseExecutor.execute(() -> {
             try (var eventStream = searchService.searchEventsForUser(query, userId, limit)) {
+                // Backpressure mechanism: limit in-flight events to prevent memory bloat
+                final int maxInFlight = 10;
+                final java.util.concurrent.atomic.AtomicInteger inFlight = new java.util.concurrent.atomic.AtomicInteger(0);
+                final Object lock = new Object();
+
                 eventStream.forEach(event -> {
+                    // Wait if too many events are in-flight (slow client)
+                    synchronized (lock) {
+                        while (inFlight.get() >= maxInFlight) {
+                            try {
+                                lock.wait(100); // Wait up to 100ms for client to consume events
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new RuntimeException("Interrupted while waiting for backpressure", e);
+                            }
+                        }
+                        inFlight.incrementAndGet();
+                    }
+
+                    // Send event to client
                     try {
                         emitter.send(SseEmitter.event().data(event));
                     } catch (IOException e) {
                         throw new RuntimeException("Error sending event", e);
+                    } finally {
+                        // Decrement in-flight counter and notify waiting threads
+                        synchronized (lock) {
+                            inFlight.decrementAndGet();
+                            lock.notifyAll();
+                        }
                     }
                 });
                 emitter.complete();

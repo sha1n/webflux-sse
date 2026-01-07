@@ -29,6 +29,13 @@ spring:
 
 server:
   port: 8083
+  tomcat:
+    threads:
+      max: 400          # Increased for virtual threads - allow more concurrent requests
+      min-spare: 20     # Keep minimum threads ready
+    max-connections: 10000  # Allow more concurrent connections
+    accept-count: 200   # Queue size for connections when all threads busy
+    connection-timeout: 20000  # 20 seconds connection timeout
 
 authorization-service:
   base-url: http://localhost:8082
