@@ -6,6 +6,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.elasticsearch.annotations.Query;
 import org.springframework.data.elasticsearch.repository.ElasticsearchRepository;
 
+import java.util.stream.Stream;
+
 public interface EventElasticsearchRepository extends ElasticsearchRepository<EventEntity, Long> {
 
     /**
@@ -14,8 +16,7 @@ public interface EventElasticsearchRepository extends ElasticsearchRepository<Ev
      * Uses pagination with search_after internally for stateless, memory-efficient iteration.
      *
      * @param query the search query text
-     * @param pageable pagination parameters (page size, sort)
-     * @return page of matching events ordered by relevance
+     * @return stream of matching events ordered by relevance
      */
     @Query("""
             {
@@ -28,7 +29,7 @@ public interface EventElasticsearchRepository extends ElasticsearchRepository<Ev
               }
             }
             """)
-    Page<EventEntity> searchByTitleOrDescription(String query, Pageable pageable);
+    Stream<EventEntity> searchByTitleOrDescription(String query);
 
     /**
      * Exact phrase search across title and description fields using Elasticsearch multi_match with phrase type.
@@ -36,8 +37,7 @@ public interface EventElasticsearchRepository extends ElasticsearchRepository<Ev
      * Uses pagination with search_after internally for stateless, memory-efficient iteration.
      *
      * @param phrase the exact phrase to search for
-     * @param pageable pagination parameters (page size, sort)
-     * @return page of matching events ordered by relevance
+     * @return stream of matching events ordered by relevance
      */
     @Query("""
             {
@@ -48,11 +48,11 @@ public interface EventElasticsearchRepository extends ElasticsearchRepository<Ev
               }
             }
             """)
-    Page<EventEntity> searchByExactPhrase(String phrase, Pageable pageable);
+    Stream<EventEntity> searchByExactPhrase(String phrase);
 
-    Page<EventEntity> findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(String title, String description, Pageable pageable);
+    Stream<EventEntity> findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(String title, String description);
 
-    Page<EventEntity> findByTitleContainingIgnoreCase(String title, Pageable pageable);
+    Stream<EventEntity> findByTitleContainingIgnoreCase(String title);
 
-    Page<EventEntity> findByDescriptionContainingIgnoreCase(String description, Pageable pageable);
+    Stream<EventEntity> findByDescriptionContainingIgnoreCase(String description);
 }

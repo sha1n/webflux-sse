@@ -120,6 +120,7 @@ function SearchApp() {
                     <span className="current">Search (Stream)</span>
                     <a href="/search-sse.html">Search (SSE)</a>
                     <a href="/permissions.html">Permissions</a>
+                    <a href="/user-permissions.html">User Permissions</a>
                 </div>
             <div className="search-container">
                 <form onSubmit={handleSearch} className="search-form">

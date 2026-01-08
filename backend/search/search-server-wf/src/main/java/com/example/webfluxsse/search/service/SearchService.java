@@ -118,4 +118,10 @@ public class SearchService {
                     return Flux.empty();
                 });
     }
+
+    public Mono<com.example.webfluxsse.search.model.UserPermissionsResponse> getUserAuthorizedEventDetails(String userId) {
+        return authorizationClient.getEventIdsForUser(userId)
+                .collectList()
+                .map(eventIds -> new com.example.webfluxsse.search.model.UserPermissionsResponse(userId, eventIds.size(), eventIds));
+    }
 }

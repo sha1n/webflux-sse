@@ -2,6 +2,7 @@ package com.example.virtualthreads.search.controller;
 
 import com.example.search.api.dto.SearchRequest;
 import com.example.virtualthreads.search.service.SearchService;
+import com.example.virtualthreads.search.model.UserPermissionsResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.MediaType;
@@ -13,6 +14,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @RestController
 @Tag(name = "Search", description = "Full-text search with permission-aware filtering")
@@ -65,12 +67,12 @@ public class SearchController {
             try (var eventStream = searchService.searchEventsForUser(query, userId, limit)) {
                 // Backpressure mechanism: limit in-flight events to prevent memory bloat
                 final int maxInFlight = 10;
-                final java.util.concurrent.atomic.AtomicInteger inFlight = new java.util.concurrent.atomic.AtomicInteger(0);
+                final AtomicInteger inFlight = new AtomicInteger(0);
                 final Object lock = new Object();
 
                 eventStream.forEach(event -> {
                     // Wait if too many events are in-flight (slow client)
-                    synchronized (lock) {
+                    synchronized (lock) { // TODO shai: IMPORTANT this should be questioned and possibly tuned!!!
                         while (inFlight.get() >= maxInFlight) {
                             try {
                                 lock.wait(100); // Wait up to 100ms for client to consume events
@@ -101,5 +103,10 @@ public class SearchController {
             }
         });
         return emitter;
+    }
+
+    @GetMapping(value = "/api/v1/user-permissions/{userId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public UserPermissionsResponse getUserPermissions(@PathVariable String userId) {
+        return searchService.getUserAuthorizedEventDetails(userId);
     }
 }

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Permissions</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/user-permissions.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>User Permissions Dashboard</h1>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="search.html">Search</a></li>
+                    <li><a href="search-sse.html">Search SSE</a></li>
+                    <li><a href="create.html">Create Event</a></li>
+                    <li><a href="bulk-create.html">Bulk Create</a></li>
+                    <li><a href="permissions.html">Permissions</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <h2>Retrieve User Event Permissions</h2>
+        <div class="form-container">
+            <label for="userIdInput">User ID:</label>
+            <input type="text" id="userIdInput" placeholder="e.g., user1" value="user1">
+            <button id="fetchPermissionsBtn">Fetch Permissions (WebFlux)</button>
+            <button id="fetchPermissionsVtBtn">Fetch Permissions (Virtual Threads)</button>
+        </div>
+
+        <div id="resultsContainer" class="results-container">
+            <h3>Permissions for <span id="displayUserId"></span></h3>
+            <p>Total authorized events: <span id="authorizedCount">0</span></p>
+            <div class="event-ids-list">
+                <h4>Event IDs:</h4>
+                <ul id="eventIdsList">
+                    <li>No events found.</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 Gemini CLI. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="js/user-permissions.js"></script>
+</body>
+</html>

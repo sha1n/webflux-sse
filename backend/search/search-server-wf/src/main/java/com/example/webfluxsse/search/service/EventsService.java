@@ -7,7 +7,6 @@ import com.example.webfluxsse.search.repository.elasticsearch.EventElasticsearch
 import com.example.webfluxsse.search.repository.r2dbc.EventRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -20,7 +19,7 @@ public class EventsService {
     private final EventElasticsearchRepository elasticsearchRepository;
 
     public EventsService(EventRepository eventRepository,
-                        @Autowired(required = false) EventElasticsearchRepository elasticsearchRepository) {
+                        EventElasticsearchRepository elasticsearchRepository) {
         this.eventRepository = eventRepository;
         this.elasticsearchRepository = elasticsearchRepository;
 
@@ -78,7 +77,7 @@ public class EventsService {
                     if (elasticsearchRepository != null) {
                         log.info("Saving {} events with dual persistence", entities.size());
                         return Flux.fromIterable(entities)
-                                .flatMap(entity -> eventRepository.save(entity))
+                                .flatMap(eventRepository::save)
                                 .collectList()
                                 .doOnSuccess(savedEntities -> log.info("Saved {} events to PostgreSQL", savedEntities.size()))
                                 .flatMapMany(savedEntities ->
@@ -97,7 +96,7 @@ public class EventsService {
                     } else {
                         log.info("Saving {} events with single persistence", entities.size());
                         return Flux.fromIterable(entities)
-                                .flatMap(entity -> eventRepository.save(entity))
+                                .flatMap(eventRepository::save)
                                 .doOnComplete(() -> log.info("Saved {} events to PostgreSQL", entities.size()))
                                 .map(EventMapper::toDto);
                     }

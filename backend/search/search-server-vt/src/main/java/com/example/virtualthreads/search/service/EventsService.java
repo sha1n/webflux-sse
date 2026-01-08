@@ -5,15 +5,13 @@ import com.example.virtualthreads.search.mapper.EventMapper;
 import com.example.virtualthreads.search.model.EventEntity;
 import com.example.virtualthreads.search.repository.elasticsearch.EventElasticsearchRepository;
 import com.example.virtualthreads.search.repository.jpa.EventRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class EventsService {
@@ -23,7 +21,7 @@ public class EventsService {
     private final EventElasticsearchRepository elasticsearchRepository;
 
     public EventsService(EventRepository eventRepository,
-                         @Autowired(required = false) EventElasticsearchRepository elasticsearchRepository) {
+                         EventElasticsearchRepository elasticsearchRepository) {
         this.eventRepository = eventRepository;
         this.elasticsearchRepository = elasticsearchRepository;
 
@@ -78,8 +76,7 @@ public class EventsService {
                 .collect(Collectors.toList());
 
         log.info("Saving {} events", entities.size());
-        List<EventEntity> savedEntities = new ArrayList<>();
-        eventRepository.saveAll(entities).forEach(savedEntities::add);
+        List<EventEntity> savedEntities = new ArrayList<>(eventRepository.saveAll(entities));
         log.info("Saved {} events to PostgreSQL", savedEntities.size());
 
         if (elasticsearchRepository != null) {

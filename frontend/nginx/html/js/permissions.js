@@ -231,6 +231,7 @@ function PermissionManagement() {
                     <a href="/search.html">Search (Stream)</a>
                     <a href="/search-sse.html">Search (SSE)</a>
                     <span className="current">Permissions</span>
+                    <a href="/user-permissions.html">User Permissions</a>
                 </div>
 
                 <div className="permissions-content">

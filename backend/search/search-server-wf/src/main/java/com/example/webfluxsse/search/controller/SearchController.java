@@ -3,6 +3,7 @@ package com.example.webfluxsse.search.controller;
 import com.example.search.api.dto.SearchRequest;
 import com.example.search.api.model.Event;
 import com.example.webfluxsse.search.service.SearchService;
+import com.example.webfluxsse.search.model.UserPermissionsResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -13,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 @RestController
 @Tag(name = "Search", description = "Full-text search with permission-aware filtering")
@@ -132,6 +134,33 @@ public class SearchController {
                 .map(event -> ServerSentEvent.<Event>builder()
                         .data(event)
                         .build());
+    }
+
+    @Operation(
+        summary = "Get user authorized event details",
+        description = "Retrieves the count and list of event IDs that a specific user has permission to access."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Successfully retrieved user permissions",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = @Schema(implementation = UserPermissionsResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid user ID provided"
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "User not found or no permissions"
+        )
+    })
+    @GetMapping(value = "/api/v1/user-permissions/{userId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<UserPermissionsResponse> getUserPermissions(@PathVariable String userId) {
+        return searchService.getUserAuthorizedEventDetails(userId);
     }
 
 }
