@@ -8,6 +8,7 @@ import com.example.virtualthreads.search.model.UserPermissionsResponse;
 import com.example.virtualthreads.search.repository.elasticsearch.EventElasticsearchRepository;
 import com.example.webfluxsse.authorization.api.dto.BatchPermissionCheckResponse;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -21,14 +22,18 @@ import org.springframework.stereotype.Service;
 public class SearchService {
 
     private static final Logger log = LoggerFactory.getLogger(SearchService.class);
+    private static final int CONCURRENCY = 4; // Match WebFlux concurrency level
     private final EventElasticsearchRepository elasticsearchRepository;
     private final AuthorizationServiceClient authorizationClient;
+    private final ExecutorService executorService;
 
     public SearchService(EventElasticsearchRepository elasticsearchRepository,
                          AuthorizationServiceClient authorizationClient) {
         this.elasticsearchRepository = elasticsearchRepository;
         this.authorizationClient = authorizationClient;
-        log.info("SearchService initialized with ElasticsearchOperations for proper pagination");
+        // Use virtual thread executor for non-blocking concurrent permission checks
+        this.executorService = Executors.newVirtualThreadPerTaskExecutor();
+        log.info("SearchService initialized with virtual thread executor (concurrency={})", CONCURRENCY);
     }
 
     public Stream<Event> searchEventsForUser(String query, String userId, Integer limit) {
@@ -61,20 +66,41 @@ public class SearchService {
         final int CHUNK_SIZE = 20; // Match WebFlux buffer size
         Iterator<EventEntity> iterator = searchStream.iterator();
 
+        // Use a queue to maintain order-preserving concurrency
+        // This matches flatMapSequential behavior: process up to CONCURRENCY batches in parallel
+        // but emit results in original order
+        Queue<Future<List<EventEntity>>> futureQueue = new LinkedList<>();
+
         return Stream.generate(() -> {
-                    // Collect next chunk from search results
-                    List<EventEntity> chunk = new ArrayList<>(CHUNK_SIZE);
-                    while (iterator.hasNext() && chunk.size() < CHUNK_SIZE) {
-                        chunk.add(iterator.next());
+                    // Submit new permission checks to maintain CONCURRENCY in-flight requests
+                    while (futureQueue.size() < CONCURRENCY && iterator.hasNext()) {
+                        List<EventEntity> chunk = new ArrayList<>(CHUNK_SIZE);
+                        while (iterator.hasNext() && chunk.size() < CHUNK_SIZE) {
+                            chunk.add(iterator.next());
+                        }
+                        if (!chunk.isEmpty()) {
+                            // Submit permission check asynchronously
+                            Future<List<EventEntity>> future = executorService.submit(() ->
+                                checkPermissionsBatch(chunk, userId)
+                            );
+                            futureQueue.add(future);
+                        }
                     }
-                    return chunk;
+
+                    // Return the next completed result in order (FIFO)
+                    if (!futureQueue.isEmpty()) {
+                        try {
+                            return futureQueue.poll().get(); // Blocks until this specific future completes
+                        } catch (InterruptedException | ExecutionException e) {
+                            log.error("Permission check failed: {}", e.getMessage());
+                            return Collections.<EventEntity>emptyList();
+                        }
+                    }
+                    // Return null to signal end of stream (no more batches to process)
+                    return null;
                 })
-                .takeWhile(chunk -> !chunk.isEmpty()) // Stop when no more chunks
-                .flatMap(chunk -> {
-                    // Check permissions for this chunk
-                    List<EventEntity> authorized = checkPermissionsBatch(chunk, userId);
-                    return authorized.stream();
-                })
+                .takeWhile(chunk -> chunk != null) // Stop when we return null (no more batches)
+                .flatMap(List::stream) // Flatten authorized events (empty batches produce no elements)
                 .map(EventMapper::toDto)
                 .limit(limit); // Limit to desired number of results
     }

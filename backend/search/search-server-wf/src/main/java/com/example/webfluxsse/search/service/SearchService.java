@@ -14,6 +14,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.function.Function;
 
 @Service
 @ConditionalOnProperty(name = "spring.elasticsearch.uris")
@@ -57,11 +58,11 @@ public class SearchService {
         }
 
         // Apply permission filtering and return results
-        // Use flatMap with concurrency=4 for parallel permission checks (better throughput than concatMap)
+        // Use flatMapSequential with concurrency=4 for parallel permission checks while preserving rank order
         return searchResults
                 .bufferTimeout(20, Duration.ofSeconds(5))
-                .flatMap(batch -> checkPermissionsBatch(batch, userId), 4)
-                .flatMapIterable(java.util.function.Function.identity())
+                .flatMapSequential(batch -> checkPermissionsBatch(batch, userId), 4)
+                .flatMapIterable(Function.identity())
                 .take(resultLimit)
                 .map(EventMapper::toDto)
                 .doOnComplete(() -> log.debug("Search completed for query='{}', userId='{}', returned up to {} results",

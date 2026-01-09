@@ -313,7 +313,7 @@ class PartialPermissionsPaginationIT {
     }
 
     @Test
-    @DisplayName("Should reproduce live VT under-reporting bug: returns 12 instead of 15 authorized events")
+    @DisplayName("Should correctly return all authorized events even when batches contain filtered results")
     void test_shouldReproduceLiveVtUnderReportingBug() throws Exception {
         // 1. Create a large number of events to trigger the bug, including the specific authorized IDs.
         // The specific authorized IDs are 1000, 2000, ..., 15000.
@@ -357,15 +357,16 @@ class PartialPermissionsPaginationIT {
                 .collectList()
                 .block();
 
-        // 4. Assert the bug: VT should incorrectly return 12 events instead of 15.
+        // 4. Assert correct behavior: VT should return all 15 authorized events
+        // Previously this test reproduced a bug where only 12 results were returned due to
+        // takeWhile stopping on empty batches. Now fixed to continue through empty batches.
         assertThat(results)
-                .as("VT service should incorrectly return 12 events instead of the 15 authorized ones")
-                .hasSize(12);
+                .as("VT service should correctly return all 15 authorized events")
+                .hasSize(15);
 
-        // Optionally, verify the returned IDs are a subset of the authorized ones
+        // Verify the returned IDs match the authorized ones
         Set<Long> returnedIds = results.stream().map(Event::id).collect(Collectors.toSet());
-        assertThat(authorizedIdsSet).containsAll(returnedIds);
-        assertThat(returnedIds).hasSize(12);
+        assertThat(returnedIds).isEqualTo(authorizedIdsSet);
 
         // Verify that the authorization service was called multiple times, as expected for pagination.
         // Given a large number of events and sparse authorization, it should make many calls.

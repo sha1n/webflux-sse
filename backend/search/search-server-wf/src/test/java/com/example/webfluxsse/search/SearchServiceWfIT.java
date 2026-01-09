@@ -382,7 +382,7 @@ class SearchServiceWfIT {
     }
 
     @Test
-    @DisplayName("Should reproduce live discrepancy: WF returns ~122 results when only 16 are authorized")
+    @DisplayName("Should correctly filter to only authorized events when permission checks preserve order")
     void test_shouldReproduceLiveDiscrepancyWithVtResults() throws Exception {
         // 1. Create 200 events in Elasticsearch
         List<EventEntity> createdEvents = createAndIndexEvents(200);
@@ -394,7 +394,6 @@ class SearchServiceWfIT {
         assertThat(authorizedIds).hasSize(16); // Sanity check
 
         // 3. Mock the authorization service to ONLY return these 16 IDs as authorized
-        // This is a crucial step to control what WF *should* see as authorized.
         setupPermissionsMock("user1", authorizedIds);
 
         // 4. Perform a search request to the WF service
@@ -411,15 +410,14 @@ class SearchServiceWfIT {
                 .collectList()
                 .block();
 
-        // 5. Assert the bug: WF should return MORE than the 16 authorized events.
-        // If it returns 16, the bug is NOT reproduced here.
-        // We are aiming to reproduce the ~122 results observation.
+        // 5. Assert correct behavior: WF should return only the 16 authorized events
+        // Previously this test reproduced a bug where ~122 results were returned due to
+        // flatMap with concurrency breaking ordering. Now fixed with flatMapSequential.
         assertThat(results)
-                .as("WF service should incorrectly return ~122 results, not the 16 authorized ones, to reproduce the bug")
-                .hasSize(122); // Asserting for the specific observed bug value
-        
-        // Verify that the authorization service was called multiple times, if necessary,
-        // to show that WF attempted to fetch more events (if its logic is similar to VT's)
+                .as("WF service should correctly return only the 16 authorized events")
+                .hasSize(16);
+
+        // Verify that the authorization service was called multiple times for batched permission checks
         verify(moreThanOrExactly(1), postRequestedFor(urlEqualTo("/api/v1/permissions/batch-check")));
     }
 }
